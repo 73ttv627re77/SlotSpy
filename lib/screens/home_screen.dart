@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/watch_provider.dart';
 import '../models/watch.dart';
+import '../theme/slotspy_dark_theme.dart';
 import 'add_watch_screen.dart';
 import 'live_slots_screen.dart';
 import 'settings_screen.dart';
@@ -25,25 +26,25 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: SlotSpyDarkTheme.background,
       appBar: AppBar(
         title: const Text(
           'SlotSpy',
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: Color(0xFF1A1A2E),
+            color: SlotSpyDarkTheme.textPrimary,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: SlotSpyDarkTheme.surface,
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.radar, color: Color(0xFF0F62FE)),
+            icon: const Icon(Icons.radar, color: SlotSpyDarkTheme.primary),
             onPressed: () => _openLiveSlots(context),
             tooltip: 'Live Slots',
           ),
           IconButton(
-            icon: const Icon(Icons.settings, color: Color(0xFF6B7280)),
+            icon: const Icon(Icons.settings, color: SlotSpyDarkTheme.textSecondary),
             onPressed: () => _openSettings(context),
             tooltip: 'Settings',
           ),
@@ -53,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (context, provider, _) {
           if (provider.loading) {
             return const Center(
-              child: CircularProgressIndicator(color: Color(0xFF0F62FE)),
+              child: CircularProgressIndicator(color: SlotSpyDarkTheme.primary),
             );
           }
 
@@ -78,11 +79,12 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _addWatch(context),
-        backgroundColor: const Color(0xFF0F62FE),
-        icon: const Icon(Icons.add, color: Colors.white),
+        backgroundColor: SlotSpyDarkTheme.primary,
+        icon: const Icon(Icons.add, color: SlotSpyDarkTheme.background),
         label: const Text(
           'Add Watch',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          style: TextStyle(
+              color: SlotSpyDarkTheme.background, fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -95,35 +97,35 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
+            const Icon(
               Icons.radar,
               size: 80,
-              color: Colors.grey.shade300,
+              color: SlotSpyDarkTheme.textMuted,
             ),
             const SizedBox(height: 24),
-            Text(
+            const Text(
               'No watches yet',
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey.shade700,
+                color: SlotSpyDarkTheme.textPrimary,
               ),
             ),
             const SizedBox(height: 12),
-            Text(
+            const Text(
               'Add a watch to get notified when gym slots become available',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 16,
-                color: Colors.grey.shade500,
+                color: SlotSpyDarkTheme.textSecondary,
               ),
             ),
             const SizedBox(height: 32),
             ElevatedButton.icon(
               onPressed: () => _addWatch(context),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0F62FE),
-                foregroundColor: Colors.white,
+                backgroundColor: SlotSpyDarkTheme.primary,
+                foregroundColor: SlotSpyDarkTheme.background,
                 padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -157,12 +159,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _confirmDelete(BuildContext context, WatchProvider provider, Watch watch) {
+  void _confirmDelete(
+      BuildContext context, WatchProvider provider, Watch watch) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Watch?'),
-        content: const Text('This action cannot be undone.'),
+        backgroundColor: SlotSpyDarkTheme.surface,
+        title: const Text(
+          'Delete Watch?',
+          style: TextStyle(color: SlotSpyDarkTheme.textPrimary),
+        ),
+        content: const Text(
+          'This action cannot be undone.',
+          style: TextStyle(color: SlotSpyDarkTheme.textSecondary),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -173,7 +183,8 @@ class _HomeScreenState extends State<HomeScreen> {
               provider.deleteWatch(watch.id);
               Navigator.pop(ctx);
             },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(
+                foregroundColor: SlotSpyDarkTheme.danger),
             child: const Text('Delete'),
           ),
         ],
@@ -220,7 +231,7 @@ class _WatchCard extends StatelessWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
-          color: Colors.red.shade400,
+          color: SlotSpyDarkTheme.danger.withValues(alpha: 0.8),
           borderRadius: BorderRadius.circular(16),
         ),
         child: const Icon(Icons.delete, color: Colors.white),
@@ -233,7 +244,7 @@ class _WatchCard extends StatelessWidget {
         elevation: 0,
         margin: const EdgeInsets.only(bottom: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        color: Colors.white,
+        color: SlotSpyDarkTheme.surface,
         child: InkWell(
           onTap: onEdit,
           borderRadius: BorderRadius.circular(16),
@@ -246,15 +257,15 @@ class _WatchCard extends StatelessWidget {
                   height: 48,
                   decoration: BoxDecoration(
                     color: watch.enabled
-                        ? const Color(0xFF0F62FE).withValues(alpha: 0.1)
-                        : Colors.grey.shade200,
+                        ? SlotSpyDarkTheme.primary.withValues(alpha: 0.15)
+                        : SlotSpyDarkTheme.surfaceLight,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     Icons.radar,
                     color: watch.enabled
-                        ? const Color(0xFF0F62FE)
-                        : Colors.grey.shade400,
+                        ? SlotSpyDarkTheme.primary
+                        : SlotSpyDarkTheme.textMuted,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -270,15 +281,15 @@ class _WatchCard extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           fontSize: 16,
                           color: watch.enabled
-                              ? const Color(0xFF1A1A2E)
-                              : Colors.grey.shade500,
+                              ? SlotSpyDarkTheme.textPrimary
+                              : SlotSpyDarkTheme.textMuted,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         watch.summary,
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
+                        style: const TextStyle(
+                          color: SlotSpyDarkTheme.textSecondary,
                           fontSize: 13,
                         ),
                         maxLines: 1,
@@ -290,7 +301,7 @@ class _WatchCard extends StatelessWidget {
                 Switch(
                   value: watch.enabled,
                   onChanged: (_) => onToggle(),
-                  activeColor: const Color(0xFF0F62FE),
+                  activeColor: SlotSpyDarkTheme.primary,
                 ),
               ],
             ),

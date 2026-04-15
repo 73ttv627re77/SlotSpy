@@ -4,6 +4,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../providers/watch_provider.dart';
 import '../models/slot.dart';
 import '../models/session_type.dart';
+import '../data/gym_link_bank.dart';
+import '../theme/slotspy_dark_theme.dart';
 
 class LiveSlotsScreen extends StatefulWidget {
   const LiveSlotsScreen({super.key});
@@ -33,26 +35,30 @@ class _LiveSlotsScreenState extends State<LiveSlotsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: SlotSpyDarkTheme.background,
       appBar: AppBar(
-        title: const Text('Live Slots'),
-        backgroundColor: Colors.white,
+        title: const Text(
+          'Live Slots',
+          style: TextStyle(color: SlotSpyDarkTheme.textPrimary),
+        ),
+        backgroundColor: SlotSpyDarkTheme.surface,
         elevation: 0,
-        foregroundColor: const Color(0xFF1A1A2E),
+        foregroundColor: SlotSpyDarkTheme.textPrimary,
         actions: [
           IconButton(
             icon: Icon(
               _showWatchedOnly ? Icons.filter_alt : Icons.filter_alt_outlined,
               color: _showWatchedOnly
-                  ? const Color(0xFF0F62FE)
-                  : const Color(0xFF6B7280),
+                  ? SlotSpyDarkTheme.primary
+                  : SlotSpyDarkTheme.textSecondary,
             ),
             onPressed: () =>
                 setState(() => _showWatchedOnly = !_showWatchedOnly),
             tooltip: 'Filter by watched gyms',
           ),
           IconButton(
-            icon: const Icon(Icons.refresh, color: Color(0xFF6B7280)),
+            icon: const Icon(Icons.refresh,
+                color: SlotSpyDarkTheme.textSecondary),
             onPressed: _refresh,
           ),
         ],
@@ -61,7 +67,8 @@ class _LiveSlotsScreenState extends State<LiveSlotsScreen> {
         builder: (context, provider, _) {
           if (provider.loading && provider.slots.isEmpty) {
             return const Center(
-              child: CircularProgressIndicator(color: Color(0xFF0F62FE)),
+              child:
+                  CircularProgressIndicator(color: SlotSpyDarkTheme.primary),
             );
           }
 
@@ -72,28 +79,29 @@ class _LiveSlotsScreenState extends State<LiveSlotsScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.error_outline,
-                        size: 64, color: Colors.grey.shade400),
+                    const Icon(Icons.error_outline,
+                        size: 64, color: SlotSpyDarkTheme.textMuted),
                     const SizedBox(height: 16),
-                    Text(
+                    const Text(
                       'Failed to load slots',
                       style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade700),
+                          color: SlotSpyDarkTheme.textPrimary),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       provider.error!,
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey.shade600),
+                      style:
+                          const TextStyle(color: SlotSpyDarkTheme.textSecondary),
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: _refresh,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0F62FE),
-                        foregroundColor: Colors.white,
+                        backgroundColor: SlotSpyDarkTheme.primary,
+                        foregroundColor: SlotSpyDarkTheme.background,
                       ),
                       child: const Text('Retry'),
                     ),
@@ -120,29 +128,31 @@ class _LiveSlotsScreenState extends State<LiveSlotsScreen> {
           if (slots.isEmpty) {
             return RefreshIndicator(
               onRefresh: _refresh,
+              color: SlotSpyDarkTheme.primary,
               child: ListView(
                 children: [
                   SizedBox(
                     height: MediaQuery.of(context).size.height * 0.6,
-                    child: Center(
+                    child: const Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(Icons.event_busy,
-                              size: 64, color: Colors.grey.shade300),
-                          const SizedBox(height: 16),
+                              size: 64, color: SlotSpyDarkTheme.textMuted),
+                          SizedBox(height: 16),
                           Text(
                             'No available slots right now',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
-                              color: Colors.grey.shade700,
+                              color: SlotSpyDarkTheme.textPrimary,
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          SizedBox(height: 8),
                           Text(
                             'Pull down to refresh',
-                            style: TextStyle(color: Colors.grey.shade500),
+                            style: TextStyle(
+                                color: SlotSpyDarkTheme.textSecondary),
                           ),
                         ],
                       ),
@@ -163,6 +173,7 @@ class _LiveSlotsScreenState extends State<LiveSlotsScreen> {
 
           return RefreshIndicator(
             onRefresh: _refresh,
+            color: SlotSpyDarkTheme.primary,
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: grouped.length,
@@ -204,7 +215,7 @@ class _GymSlotGroup extends StatelessWidget {
           child: Row(
             children: [
               const Icon(Icons.location_on,
-                  size: 18, color: Color(0xFF0F62FE)),
+                  size: 18, color: SlotSpyDarkTheme.primary),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -212,14 +223,14 @@ class _GymSlotGroup extends StatelessWidget {
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
-                    color: Color(0xFF1A1A2E),
+                    color: SlotSpyDarkTheme.textPrimary,
                   ),
                 ),
               ),
               Text(
                 '${slots.length} slot${slots.length > 1 ? 's' : ''}',
-                style: TextStyle(
-                  color: Colors.grey.shade600,
+                style: const TextStyle(
+                  color: SlotSpyDarkTheme.textSecondary,
                   fontSize: 13,
                 ),
               ),
@@ -248,7 +259,7 @@ class _SlotCard extends StatelessWidget {
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: Colors.white,
+      color: SlotSpyDarkTheme.surface,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Row(
@@ -262,29 +273,30 @@ class _SlotCard extends StatelessWidget {
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
+                      color: SlotSpyDarkTheme.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(Icons.calendar_today,
-                          size: 14, color: Colors.grey.shade500),
+                      const Icon(Icons.calendar_today,
+                          size: 14, color: SlotSpyDarkTheme.textSecondary),
                       const SizedBox(width: 4),
                       Text(
                         slot.formattedDate,
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
+                        style: const TextStyle(
+                          color: SlotSpyDarkTheme.textSecondary,
                           fontSize: 13,
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Icon(Icons.access_time,
-                          size: 14, color: Colors.grey.shade500),
+                      const Icon(Icons.access_time,
+                          size: 14, color: SlotSpyDarkTheme.textSecondary),
                       const SizedBox(width: 4),
                       Text(
                         slot.formattedTime,
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
+                        style: const TextStyle(
+                          color: SlotSpyDarkTheme.textSecondary,
                           fontSize: 13,
                         ),
                       ),
@@ -296,7 +308,7 @@ class _SlotCard extends StatelessWidget {
                       '£${sessionType!.price!.toStringAsFixed(2)}',
                       style: const TextStyle(
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF0F62FE),
+                        color: SlotSpyDarkTheme.success,
                       ),
                     ),
                   ],
@@ -306,8 +318,8 @@ class _SlotCard extends StatelessWidget {
             ElevatedButton(
               onPressed: () => _bookSlot(context),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0F62FE),
-                foregroundColor: Colors.white,
+                backgroundColor: SlotSpyDarkTheme.primary,
+                foregroundColor: SlotSpyDarkTheme.background,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -326,7 +338,12 @@ class _SlotCard extends StatelessWidget {
   }
 
   Future<void> _bookSlot(BuildContext context) async {
-    final url = sessionType?.url ?? 'https://www.everyoneactive.com/';
+    // Use GymLinkBank to get the best booking URL
+    final url = GymLinkBank.buildBestBookingUrl(
+      slotId: slot.id,
+      facilityUseUrl: slot.facilityUseUrl,
+      fallbackUrl: sessionType?.url,
+    );
     final uri = Uri.parse(url);
     try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -335,10 +352,7 @@ class _SlotCard extends StatelessWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Could not open $url'),
-            action: SnackBarAction(
-              label: 'Copy',
-              onPressed: () {},
-            ),
+            backgroundColor: SlotSpyDarkTheme.surface,
           ),
         );
       }

@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:home_widget/home_widget.dart';
 
+import 'theme/slotspy_dark_theme.dart';
 import 'services/database_service.dart';
 import 'services/rpde_service.dart';
 import 'services/notification_service.dart';
@@ -30,6 +33,9 @@ void main() async {
   await notifications.initialize();
   await notifications.requestPermissions();
 
+  // Initialize home widget
+  await _initHomeWidget();
+
   runApp(
     SlotSpyApp(
       prefs: prefs,
@@ -38,6 +44,16 @@ void main() async {
       notifications: notifications,
     ),
   );
+}
+
+Future<void> _initHomeWidget() async {
+  try {
+    // Set the app group ID for iOS widget data sharing
+    // NOTE: Native iOS setup required — see lib/data/gym_link_bank.dart
+    await HomeWidget.setAppGroupId('group.com.slotspy.app');
+  } catch (_) {
+    // Widget not available on this platform
+  }
 }
 
 class SlotSpyApp extends StatelessWidget {
@@ -80,28 +96,26 @@ class SlotSpyApp extends StatelessWidget {
       ],
       child: Consumer<SettingsProvider>(
         builder: (context, settings, _) {
+          // Handle wakelock based on settings
+          _updateWakelock(settings.keepAwakeEnabled);
+
           return MaterialApp(
             title: 'SlotSpy',
             debugShowCheckedModeBanner: false,
-            theme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: const Color(0xFF0F62FE),
-                brightness: Brightness.light,
-              ),
-              scaffoldBackgroundColor: const Color(0xFFF5F7FA),
-              appBarTheme: const AppBarTheme(
-                backgroundColor: Colors.white,
-                foregroundColor: Color(0xFF1A1A2E),
-                elevation: 0,
-                centerTitle: false,
-              ),
-              useMaterial3: true,
-            ),
+            theme: SlotSpyDarkTheme.theme,
             home: const MainNavigator(),
           );
         },
       ),
     );
+  }
+
+  void _updateWakelock(bool enabled) {
+    if (enabled) {
+      WakelockPlus.enable();
+    } else {
+      WakelockPlus.disable();
+    }
   }
 }
 
@@ -153,6 +167,7 @@ class _MainNavigatorState extends State<MainNavigator> {
   void dispose() {
     _slotMatchSubscription?.cancel();
     context.read<PollingService>().stop();
+    WakelockPlus.disable();
     super.dispose();
   }
 
@@ -162,9 +177,10 @@ class _MainNavigatorState extends State<MainNavigator> {
       children: [
         const HomeScreen(),
         if (_activeMatch != null)
-          AlertOverlay(
+          CountdownAlertOverlay(
             slot: _activeMatch!.slot,
             sessionType: _activeMatch!.sessionType,
+            bookingUrl: _activeMatch!.bookingUrl,
             onDismiss: () => setState(() => _activeMatch = null),
           ),
       ],

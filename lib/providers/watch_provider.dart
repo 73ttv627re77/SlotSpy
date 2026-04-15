@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show TimeOfDay, DayPeriod;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:home_widget/home_widget.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/watch.dart';
 import '../models/slot.dart';
 import '../models/session_type.dart';
@@ -9,6 +11,7 @@ import '../models/gym.dart';
 import '../services/database_service.dart';
 import '../services/rpde_service.dart';
 import '../services/notification_service.dart';
+import '../data/gym_link_bank.dart';
 
 class WatchProvider extends ChangeNotifier {
   final DatabaseService _db;
@@ -198,12 +201,16 @@ class SettingsProvider extends ChangeNotifier {
   static const _keyPollInterval = 'poll_interval_minutes';
   static const _keyAlertSound = 'alert_sound_enabled';
   static const _keyKeepAwake = 'keep_awake_enabled';
+  static const _keyAutoOpenBooking = 'auto_open_booking_enabled';
+  static const _keyCountdownDuration = 'countdown_duration_seconds';
 
   SettingsProvider(this._prefs);
 
   int get pollIntervalMinutes => _prefs.getInt(_keyPollInterval) ?? 2;
   bool get alertSoundEnabled => _prefs.getBool(_keyAlertSound) ?? true;
-  bool get keepAwakeEnabled => _prefs.getBool(_keyKeepAwake) ?? false;
+  bool get keepAwakeEnabled => _prefs.getBool(_keyKeepAwake) ?? true;
+  bool get autoOpenBookingEnabled => _prefs.getBool(_keyAutoOpenBooking) ?? true;
+  int get countdownDurationSeconds => _prefs.getInt(_keyCountdownDuration) ?? 30;
 
   Future<void> setPollInterval(int minutes) async {
     await _prefs.setInt(_keyPollInterval, minutes);
@@ -217,6 +224,21 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<void> setKeepAwake(bool enabled) async {
     await _prefs.setBool(_keyKeepAwake, enabled);
+    notifyListeners();
+    if (enabled) {
+      WakelockPlus.enable();
+    } else {
+      WakelockPlus.disable();
+    }
+  }
+
+  Future<void> setAutoOpenBooking(bool enabled) async {
+    await _prefs.setBool(_keyAutoOpenBooking, enabled);
+    notifyListeners();
+  }
+
+  Future<void> setCountdownDuration(int seconds) async {
+    await _prefs.setInt(_keyCountdownDuration, seconds);
     notifyListeners();
   }
 }
@@ -270,6 +292,19 @@ class PollingService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _updateHomeWidget(bool hasAlerts) async {
+    try {
+      await HomeWidget.saveWidgetData<String>('status', hasAlerts ? 'Slot open!' : 'All clear');
+      await HomeWidget.saveWidgetData<String>('statusColor', hasAlerts ? 'red' : 'green');
+      await HomeWidget.updateWidget(
+        iOSName: 'SlotSpyWidget',
+        qualifiedAndroidName: 'es.antonborri.home_widget.HomeWidgetProvider',
+      );
+    } catch (_) {
+      // Widget not available
+    }
+  }
+
   Future<void> _doPoll() async {
     if (_slotProvider == null || _watchProvider == null) return;
 
@@ -279,6 +314,7 @@ class PollingService extends ChangeNotifier {
     // Check for matching slots
     final availableSlots = _slotProvider!.availableSlots;
     final activeWatches = _watchProvider!.activeWatches;
+    bool hasAlerts = false;
 
     for (final watch in activeWatches) {
       for (final slot in availableSlots) {
@@ -287,17 +323,28 @@ class PollingService extends ChangeNotifier {
           if (shouldAlert) {
             await _db.recordAlert(watch.id, slot.id);
             final sessionType = _slotProvider!.getSessionTypeForSlot(slot);
+            hasAlerts = true;
+
+            // Build the best booking URL using GymLinkBank
+            final bookingUrl = GymLinkBank.buildBestBookingUrl(
+              slotId: slot.id,
+              facilityUseUrl: slot.facilityUseUrl,
+              fallbackUrl: sessionType?.url,
+            );
+
             await _notifications.showSlotAvailableNotification(
               title: '🏋️ Slot available!',
               body: '${sessionType?.name ?? 'Session'} at ${sessionType?.gym.name ?? 'Gym'} — ${slot.formattedTime}',
               slotId: slot.id,
             );
-            _onSlotFoundController.add(SlotMatch(watch, slot, sessionType));
+            _onSlotFoundController.add(SlotMatch(watch, slot, sessionType, bookingUrl));
           }
         }
       }
     }
 
+    // Update home widget after each poll
+    await _updateHomeWidget(hasAlerts);
     notifyListeners();
   }
 
@@ -368,6 +415,7 @@ class SlotMatch {
   final Watch watch;
   final Slot slot;
   final SessionType? sessionType;
+  final String bookingUrl;
 
-  SlotMatch(this.watch, this.slot, this.sessionType);
+  SlotMatch(this.watch, this.slot, this.sessionType, [this.bookingUrl = '']);
 }

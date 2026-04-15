@@ -4,6 +4,7 @@ import '../providers/watch_provider.dart';
 import '../models/watch.dart';
 import '../models/gym.dart';
 import '../models/session_type.dart';
+import '../theme/slotspy_dark_theme.dart';
 
 class AddWatchScreen extends StatefulWidget {
   final Watch? watchToEdit;
@@ -53,12 +54,12 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: SlotSpyDarkTheme.background,
       appBar: AppBar(
         title: Text(_isEditing ? 'Edit Watch' : 'New Watch'),
-        backgroundColor: Colors.white,
+        backgroundColor: SlotSpyDarkTheme.surface,
         elevation: 0,
-        foregroundColor: const Color(0xFF1A1A2E),
+        foregroundColor: SlotSpyDarkTheme.textPrimary,
       ),
       body: Stepper(
         currentStep: _currentStep,
@@ -73,8 +74,8 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
                   ElevatedButton(
                     onPressed: details.onStepContinue,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F62FE),
-                      foregroundColor: Colors.white,
+                      backgroundColor: SlotSpyDarkTheme.primary,
+                      foregroundColor: SlotSpyDarkTheme.background,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -85,8 +86,8 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
                   ElevatedButton(
                     onPressed: details.onStepContinue,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F62FE),
-                      foregroundColor: Colors.white,
+                      backgroundColor: SlotSpyDarkTheme.primary,
+                      foregroundColor: SlotSpyDarkTheme.background,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -105,31 +106,43 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
         },
         steps: [
           Step(
-            title: const Text('Session Type'),
-            subtitle: Text(_sessionNamePattern.isNotEmpty
-                ? _sessionNamePattern
-                : 'Any session'),
+            title: const Text('Session Type',
+                style: TextStyle(color: SlotSpyDarkTheme.textPrimary)),
+            subtitle: Text(
+              _sessionNamePattern.isNotEmpty ? _sessionNamePattern : 'Any session',
+              style: const TextStyle(color: SlotSpyDarkTheme.textSecondary),
+            ),
             isActive: _currentStep >= 0,
             state: _currentStep > 0 ? StepState.complete : StepState.indexed,
             content: _buildSessionTypeStep(),
           ),
           Step(
-            title: const Text('Gym'),
-            subtitle: Text(_selectedGym?.name ?? 'Any gym'),
+            title: const Text('Gym',
+                style: TextStyle(color: SlotSpyDarkTheme.textPrimary)),
+            subtitle: Text(
+              _selectedGym?.name ?? 'Any gym',
+              style: const TextStyle(color: SlotSpyDarkTheme.textSecondary),
+            ),
             isActive: _currentStep >= 1,
             state: _currentStep > 1 ? StepState.complete : StepState.indexed,
             content: _buildGymStep(),
           ),
           Step(
-            title: const Text('Time Preferences'),
-            subtitle: Text(_getTimePrefsSummary()),
+            title: const Text('Time Preferences',
+                style: TextStyle(color: SlotSpyDarkTheme.textPrimary)),
+            subtitle: Text(
+              _getTimePrefsSummary(),
+              style: const TextStyle(color: SlotSpyDarkTheme.textSecondary),
+            ),
             isActive: _currentStep >= 2,
             state: _currentStep > 2 ? StepState.complete : StepState.indexed,
             content: _buildTimePrefsStep(),
           ),
           Step(
-            title: const Text('Review & Save'),
-            subtitle: const Text('Review your watch'),
+            title: const Text('Review & Save',
+                style: TextStyle(color: SlotSpyDarkTheme.textPrimary)),
+            subtitle: const Text('Review your watch',
+                style: TextStyle(color: SlotSpyDarkTheme.textSecondary)),
             isActive: _currentStep >= 3,
             state: StepState.indexed,
             content: _buildReviewStep(),
@@ -146,29 +159,33 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
         TextField(
           decoration: InputDecoration(
             hintText: 'Search sessions (e.g. Badminton, Gym)',
-            prefixIcon: const Icon(Icons.search),
+            prefixIcon:
+                const Icon(Icons.search, color: SlotSpyDarkTheme.textSecondary),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: SlotSpyDarkTheme.surfaceLight,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
             ),
           ),
+          style: const TextStyle(color: SlotSpyDarkTheme.textPrimary),
           onChanged: (v) => setState(() => _sessionNamePattern = v),
         ),
         const SizedBox(height: 16),
         Consumer<SlotProvider>(
           builder: (context, provider, _) {
             if (provider.loadingSessionSeries) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(
+                  child: CircularProgressIndicator(
+                      color: SlotSpyDarkTheme.primary));
             }
             final types = provider.searchSessionTypes(_sessionNamePattern);
             if (types.isEmpty && provider.sessionTypes.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.all(16),
+              return const Padding(
+                padding: EdgeInsets.all(16),
                 child: Text(
                   'No session types loaded yet. You can continue without selecting one.',
-                  style: TextStyle(color: Colors.grey.shade600),
+                  style: TextStyle(color: SlotSpyDarkTheme.textSecondary),
                 ),
               );
             }
@@ -182,21 +199,28 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
                 return Card(
                   elevation: 0,
                   color: isSelected
-                      ? const Color(0xFF0F62FE).withValues(alpha: 0.1)
-                      : Colors.white,
+                      ? SlotSpyDarkTheme.primary.withValues(alpha: 0.15)
+                      : SlotSpyDarkTheme.surface,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                     side: isSelected
-                        ? const BorderSide(color: Color(0xFF0F62FE))
+                        ? const BorderSide(color: SlotSpyDarkTheme.primary)
                         : BorderSide.none,
                   ),
                   child: ListTile(
-                    title: Text(st.name),
-                    subtitle: Text('${st.gym.name} • ${st.activity}'),
+                    title: Text(st.name,
+                        style:
+                            const TextStyle(color: SlotSpyDarkTheme.textPrimary)),
+                    subtitle: Text('${st.gym.name} • ${st.activity}',
+                        style: const TextStyle(
+                            color: SlotSpyDarkTheme.textSecondary)),
                     trailing: st.price != null
                         ? Text(
                             '£${st.price!.toStringAsFixed(2)}',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: SlotSpyDarkTheme.success,
+                            ),
                           )
                         : null,
                     onTap: () {
@@ -222,33 +246,40 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ListTile(
-              title: const Text('Any gym'),
+              title: const Text('Any gym',
+                  style: TextStyle(color: SlotSpyDarkTheme.textPrimary)),
               leading: Radio<String?>(
                 value: null,
                 groupValue: _selectedGym?.id,
+                activeColor: SlotSpyDarkTheme.primary,
                 onChanged: (_) => setState(() => _selectedGym = null),
               ),
               onTap: () => setState(() => _selectedGym = null),
             ),
-            const Divider(),
+            const Divider(color: SlotSpyDarkTheme.surfaceLight),
             ...provider.gyms.map((gym) {
               final isSelected = _selectedGym?.id == gym.id;
               return Card(
                 elevation: 0,
                 color: isSelected
-                    ? const Color(0xFF0F62FE).withValues(alpha: 0.1)
-                    : Colors.white,
+                    ? SlotSpyDarkTheme.primary.withValues(alpha: 0.15)
+                    : SlotSpyDarkTheme.surface,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                   side: isSelected
-                      ? const BorderSide(color: Color(0xFF0F62FE))
+                      ? const BorderSide(color: SlotSpyDarkTheme.primary)
                       : BorderSide.none,
                 ),
                 child: ListTile(
-                  title: Text(gym.name),
-                  subtitle: Text(gym.address),
+                  title: Text(gym.name,
+                      style:
+                          const TextStyle(color: SlotSpyDarkTheme.textPrimary)),
+                  subtitle: Text(gym.address,
+                      style:
+                          const TextStyle(color: SlotSpyDarkTheme.textSecondary)),
                   trailing: isSelected
-                      ? const Icon(Icons.check_circle, color: Color(0xFF0F62FE))
+                      ? const Icon(Icons.check_circle,
+                          color: SlotSpyDarkTheme.primary)
                       : null,
                   onTap: () => setState(() => _selectedGym = gym),
                 ),
@@ -267,7 +298,9 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
       children: [
         const Text(
           'Days of Week (leave empty for any day)',
-          style: TextStyle(fontWeight: FontWeight.w600),
+          style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: SlotSpyDarkTheme.textPrimary),
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -287,15 +320,22 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
                   }
                 });
               },
-              selectedColor: const Color(0xFF0F62FE).withValues(alpha: 0.2),
-              checkmarkColor: const Color(0xFF0F62FE),
+              selectedColor: SlotSpyDarkTheme.primary.withValues(alpha: 0.2),
+              checkmarkColor: SlotSpyDarkTheme.primary,
+              backgroundColor: SlotSpyDarkTheme.surface,
+              labelStyle: TextStyle(
+                color: selected
+                    ? SlotSpyDarkTheme.primary
+                    : SlotSpyDarkTheme.textSecondary,
+              ),
             );
           }),
         ),
         const SizedBox(height: 24),
         const Text(
           'Time Window (optional)',
-          style: TextStyle(fontWeight: FontWeight.w600),
+          style: TextStyle(
+              fontWeight: FontWeight.w600, color: SlotSpyDarkTheme.textPrimary),
         ),
         const SizedBox(height: 12),
         Row(
@@ -303,26 +343,39 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: () => _pickTime(context, true),
-                icon: const Icon(Icons.access_time),
+                icon: const Icon(Icons.access_time,
+                    color: SlotSpyDarkTheme.textSecondary),
                 label: Text(
                   _earliestTime != null
                       ? _formatTime(_earliestTime!)
                       : 'Earliest time',
+                  style:
+                      const TextStyle(color: SlotSpyDarkTheme.textSecondary),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: SlotSpyDarkTheme.surfaceLight),
+                  backgroundColor: SlotSpyDarkTheme.surface,
                 ),
               ),
             ),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Text('to'),
+              child: Text('to',
+                  style: TextStyle(color: SlotSpyDarkTheme.textSecondary)),
             ),
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: () => _pickTime(context, false),
-                icon: const Icon(Icons.access_time),
+                icon: const Icon(Icons.access_time,
+                    color: SlotSpyDarkTheme.textSecondary),
                 label: Text(
-                  _latestTime != null
-                      ? _formatTime(_latestTime!)
-                      : 'Latest time',
+                  _latestTime != null ? _formatTime(_latestTime!) : 'Latest time',
+                  style:
+                      const TextStyle(color: SlotSpyDarkTheme.textSecondary),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: SlotSpyDarkTheme.surfaceLight),
+                  backgroundColor: SlotSpyDarkTheme.surface,
                 ),
               ),
             ),
@@ -363,43 +416,43 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Card(
-          elevation: 0,
-          color: Colors.white,
-          shape: RoundedRectangleBorder(
+        Container(
+          decoration: BoxDecoration(
+            color: SlotSpyDarkTheme.surface,
             borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: Colors.grey.shade200),
+            border: Border.all(color: SlotSpyDarkTheme.surfaceLight),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Watch Summary',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Watch Summary',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: SlotSpyDarkTheme.textPrimary,
                 ),
-                const SizedBox(height: 16),
-                _reviewRow('Session', watch.sessionNamePattern ?? 'Any session'),
-                _reviewRow('Gym', watch.gymName ?? 'Any gym'),
-                _reviewRow('Days', _selectedDays.isEmpty
-                    ? 'Any day'
-                    : _daysSummary(_selectedDays)),
-                _reviewRow('Time', _getTimePrefsSummary()),
-              ],
-            ),
+              ),
+              const SizedBox(height: 16),
+              _reviewRow('Session', watch.sessionNamePattern ?? 'Any session'),
+              _reviewRow('Gym', watch.gymName ?? 'Any gym'),
+              _reviewRow('Days', _selectedDays.isEmpty
+                  ? 'Any day'
+                  : _daysSummary(_selectedDays)),
+              _reviewRow('Time', _getTimePrefsSummary()),
+            ],
           ),
         ),
         const SizedBox(height: 16),
         SwitchListTile(
-          title: const Text('Notifications enabled'),
-          subtitle: const Text('Get notified when matching slots are found'),
+          title: const Text('Notifications enabled',
+              style: TextStyle(color: SlotSpyDarkTheme.textPrimary)),
+          subtitle: const Text('Get notified when matching slots are found',
+              style: TextStyle(color: SlotSpyDarkTheme.textSecondary)),
           value: _notificationsEnabled,
           onChanged: (v) => setState(() => _notificationsEnabled = v),
-          activeColor: const Color(0xFF0F62FE),
+          activeColor: SlotSpyDarkTheme.primary,
         ),
       ],
     );
@@ -415,13 +468,16 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
             width: 80,
             child: Text(
               label,
-              style: TextStyle(color: Colors.grey.shade600),
+              style: const TextStyle(color: SlotSpyDarkTheme.textSecondary),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontWeight: FontWeight.w500),
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+                color: SlotSpyDarkTheme.textPrimary,
+              ),
             ),
           ),
         ],
@@ -433,12 +489,9 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
     if (_earliestTime == null && _latestTime == null) {
       return 'Any time';
     }
-    final start = _earliestTime != null
-        ? _formatTime(_earliestTime!)
-        : '00:00';
-    final end = _latestTime != null
-        ? _formatTime(_latestTime!)
-        : '23:59';
+    final start =
+        _earliestTime != null ? _formatTime(_earliestTime!) : '00:00';
+    final end = _latestTime != null ? _formatTime(_latestTime!) : '23:59';
     return '$start - $end';
   }
 
