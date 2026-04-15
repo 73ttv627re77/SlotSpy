@@ -11,7 +11,7 @@ class VenueDatabase {
   VenueDatabase._();
 
   static const String _eaFeed =
-      'https://opendata.leisurecloud.live/api/feeds/EveryoneActive-session-series';
+      'https://opendata.leisurecloud.live/api/feeds/EveryoneActive-live-session-series';
   static const String _betterFeed =
       'https://better-admin.org.uk/api/openactive/better/session-series';
 
@@ -284,6 +284,8 @@ class VenueDatabase {
     // Croydon
     _better('better:croydon-addiscombe', 'Addiscombe Leisure Centre',
         'Croydon, CR0 6RJ', 51.3764, -0.0803),
+    _ea('ea:westcroft-leisure-centre', 'Westcroft Leisure Centre',
+        'Carshalton, Sutton, London SM5 2TG', 51.3679, -0.1584),
 
     // Greenwich
     _better('better:greenwich-hornfair', 'Hornfair Park Leisure',

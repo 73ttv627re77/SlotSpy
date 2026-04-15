@@ -8,9 +8,9 @@ import 'database_service.dart';
 class RpdeService {
   final DatabaseService _db;
   static const String _slotsFeedUrl =
-      'https://opendata.leisurecloud.live/api/feeds/EveryoneActive-test-slots';
+      'https://opendata.leisurecloud.live/api/feeds/EveryoneActive-live-slots';
   static const String _sessionSeriesFeedUrl =
-      'https://opendata.leisurecloud.live/api/feeds/EveryoneActive-test-session-series';
+      'https://opendata.leisurecloud.live/api/feeds/EveryoneActive-live-session-series';
 
   RpdeService(this._db);
 
@@ -61,20 +61,29 @@ class RpdeService {
     return allSlots;
   }
 
+  /// Optional callback fired after each page is converted to SessionTypes.
+  /// Use this for incremental UI updates while pagination is in progress.
+  /// Callback signature: (pageNumber, cumulativeSessionTypesSoFar)
+  void Function(int page, List<SessionType> sessionTypes)? onPageFetched;
+
   Future<List<SessionType>> fetchSessionSeries({
     void Function(int current, int total)? onProgress,
   }) async {
     final allItems = <Map<String, dynamic>>[];
     String? nextUrl;
     int page = 0;
+    bool morePages = true;
 
-    do {
+    while (morePages) {
       final url = nextUrl ?? _sessionSeriesFeedUrl;
       try {
         final response = await http.get(Uri.parse(url)).timeout(
-          const Duration(seconds: 30),
+          const Duration(seconds: 15),
         );
-        if (response.statusCode != 200) break;
+        if (response.statusCode != 200) {
+          morePages = false;
+          break;
+        }
 
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final items = data['items'] as List? ?? [];
@@ -86,28 +95,38 @@ class RpdeService {
           }
         }
 
-        onProgress?.call(page, page);
+        // Build cumulative SessionTypes so far and fire the callback
+        if (onPageFetched != null) {
+          final allSessionTypes = <SessionType>[];
+          for (final it in allItems) {
+            try {
+              final gym = Gym.fromSessionSeries(it['data'] as Map<String, dynamic>);
+              allSessionTypes.add(SessionType.fromSessionSeries(it['data'] as Map<String, dynamic>, gym));
+            } catch (_) {}
+          }
+          onPageFetched!(page, allSessionTypes);
+        }
 
         final next = data['next'];
         if (next == null || next == url || items.isEmpty) {
-          break;
+          morePages = false;
+        } else {
+          nextUrl = next as String;
         }
-        nextUrl = next as String;
       } catch (e) {
-        break;
+        morePages = false;
       }
-    } while (nextUrl != null);
+    }
 
-    // Cache session series
+    // Cache the full list
     await _db.cacheSessionSeriesList(allItems);
 
-    // Convert to SessionType objects
+    // Build and return the complete list
     final sessionTypes = <SessionType>[];
     for (final item in allItems) {
       try {
-        final data = item['data'] as Map<String, dynamic>;
-        final gym = Gym.fromSessionSeries(data);
-        sessionTypes.add(SessionType.fromSessionSeries(data, gym));
+        final gym = Gym.fromSessionSeries(item['data'] as Map<String, dynamic>);
+        sessionTypes.add(SessionType.fromSessionSeries(item['data'] as Map<String, dynamic>, gym));
       } catch (_) {}
     }
 

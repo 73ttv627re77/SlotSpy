@@ -139,6 +139,10 @@ class _MainNavigatorState extends State<MainNavigator> {
   }
 
   void _initPolling() async {
+    // Yield immediately so the first frame renders without being blocked
+    // by async init work (DB loads, polling setup).
+    await Future.microtask(() {});
+
     final slotProvider = context.read<SlotProvider>();
     final watchProvider = context.read<WatchProvider>();
     final settings = context.read<SettingsProvider>();
@@ -159,7 +163,7 @@ class _MainNavigatorState extends State<MainNavigator> {
     await slotProvider.loadCachedSlots();
     await watchProvider.loadWatches();
 
-    // Start polling
+    // Start polling — first poll fires after interval, not immediately
     polling.start();
   }
 

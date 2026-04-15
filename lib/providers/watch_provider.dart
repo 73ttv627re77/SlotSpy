@@ -111,7 +111,8 @@ class SlotProvider extends ChangeNotifier {
       _slots = await _rpde.fetchSlots(
         onProgress: (current, total) {
           _pollPage = current;
-          notifyListeners();
+          // No notifyListeners() here — progress is internal-only
+          // and calling it per-page floods the UI thread with rebuilds.
         },
       );
       _pollPage = 0;
@@ -123,14 +124,38 @@ class SlotProvider extends ChangeNotifier {
     }
   }
 
+  /// Progressively update session types after each page of the feed is fetched.
+  /// Debounced: only notifies listeners at most once per second to prevent
+  /// the notification storm that would otherwise freeze the UI.
+  List<SessionType>? _pendingSessionTypes;
+  bool _debouncePending = false;
+
+  void _updateSessionTypesFromPage(int page, List<SessionType> types) {
+    _pendingSessionTypes = types;
+    _gyms = types.map((s) => s.gym).toSet().toList();
+    if (_debouncePending) return;
+    _debouncePending = true;
+    Future.delayed(const Duration(milliseconds: 1000), () {
+      _debouncePending = false;
+      if (_pendingSessionTypes != null) {
+        _sessionTypes = _pendingSessionTypes!;
+        notifyListeners();
+      }
+    });
+  }
+
   Future<void> fetchSessionSeries() async {
     _loadingSessionSeries = true;
     notifyListeners();
     try {
+      // Pass the internal method as the per-page callback so the provider
+      // state stays in sync as pages arrive.
+      _rpde.onPageFetched = _updateSessionTypesFromPage;
       _sessionTypes = await _rpde.fetchSessionSeries();
       _gyms = _sessionTypes.map((s) => s.gym).toSet().toList();
     } finally {
       _loadingSessionSeries = false;
+      _rpde.onPageFetched = null;
       notifyListeners();
     }
   }
@@ -294,10 +319,18 @@ class PollingService extends ChangeNotifier {
   void start() {
     if (_isPolling) return;
     _isPolling = true;
-    _doPoll();
-    _timer = Timer.periodic(
-      Duration(minutes: _intervalMinutes),
-      (_) => _doPoll(),
+    // Defer first poll by 30s so the UI renders immediately without
+    // being blocked by a network request on the main thread.
+    _timer = Timer(
+      const Duration(seconds: 30),
+      () {
+        _doPoll();
+        // After the initial deferred poll, switch to regular interval
+        _timer = Timer.periodic(
+          Duration(minutes: _intervalMinutes),
+          (_) => _doPoll(),
+        );
+      },
     );
     notifyListeners();
   }
