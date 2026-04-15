@@ -319,18 +319,10 @@ class PollingService extends ChangeNotifier {
   void start() {
     if (_isPolling) return;
     _isPolling = true;
-    // Defer first poll by 30s so the UI renders immediately without
-    // being blocked by a network request on the main thread.
-    _timer = Timer(
-      const Duration(seconds: 30),
-      () {
-        _doPoll();
-        // After the initial deferred poll, switch to regular interval
-        _timer = Timer.periodic(
-          Duration(minutes: _intervalMinutes),
-          (_) => _doPoll(),
-        );
-      },
+    _doPoll();
+    _timer = Timer.periodic(
+      Duration(minutes: _intervalMinutes),
+      (_) => _doPoll(),
     );
     notifyListeners();
   }
