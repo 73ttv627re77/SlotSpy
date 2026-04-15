@@ -5,6 +5,7 @@ import '../models/watch.dart';
 import '../models/gym.dart';
 import '../models/session_type.dart';
 import '../theme/slotspy_dark_theme.dart';
+import '../data/venue_database.dart';
 
 class AddWatchScreen extends StatefulWidget {
   final Watch? watchToEdit;
@@ -72,20 +73,46 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
     }
   }
 
-  List<Gym> get _filteredGyms {
-    final provider = context.read<SlotProvider>();
-    if (_gymSearchQuery.isEmpty) return provider.gyms;
+  /// Static gyms from the pre-baked database — available immediately.
+  List<Gym> get _staticGyms {
+    if (_gymSearchQuery.isEmpty) return VenueDatabase.gyms;
     final q = _gymSearchQuery.toLowerCase();
-    return provider.gyms.where((g) {
+    return VenueDatabase.gyms.where((g) {
       return g.name.toLowerCase().contains(q) ||
           g.address.toLowerCase().contains(q);
     }).toList();
   }
 
+  /// All gyms shown in step 1: static DB gyms + API gyms (deduplicated by name).
+  List<Gym> get _filteredGyms {
+    final provider = context.read<SlotProvider>();
+    // Start with static gyms
+    final staticGyms = _staticGyms;
+    // Build set of static gym names for dedup
+    final staticNames = staticGyms.map((g) => g.name.toLowerCase()).toSet();
+    // Add API gyms that aren't duplicates
+    final apiGyms = provider.gyms
+        .where((g) => !staticNames.contains(g.name.toLowerCase()))
+        .toList();
+    return [...staticGyms, ...apiGyms];
+  }
+
+  /// Sessions visible for the selected gym.
+  /// For static DB gyms (Everyone Active / Better), matches by name.
+  /// For API gyms, matches by id.
   List<SessionType> get _sessionsAtSelectedGym {
     if (_selectedGym == null) return [];
     final provider = context.read<SlotProvider>();
-    return provider.sessionTypes.where((st) => st.gym.id == _selectedGym!.id).toList();
+    final gym = _selectedGym!;
+    if (gym.provider == 'everyoneactive' || gym.provider == 'better') {
+      // Static gym — match by name
+      final q = gym.name.toLowerCase();
+      return provider.sessionTypes
+          .where((st) => st.gym.name.toLowerCase() == q)
+          .toList();
+    }
+    // API gym — match by id
+    return provider.sessionTypes.where((st) => st.gym.id == gym.id).toList();
   }
 
   int _sessionCountForGym(Gym gym, List<SessionType> allSessions) {
@@ -251,7 +278,10 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
             const Divider(color: SlotSpyDarkTheme.surfaceLight),
             ...gyms.map((gym) {
               final isSelected = _selectedGym?.id == gym.id;
-              final count = _sessionCountForGym(gym, allSessions);
+              // Count API sessions for this gym
+              final count = gym.provider == 'everyoneactive' || gym.provider == 'better'
+                  ? provider.sessionsAtGym(gym.name, gym.provider).length
+                  : _sessionCountForGym(gym, allSessions);
               return Card(
                 elevation: 0,
                 color: isSelected
@@ -268,12 +298,22 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
                       style:
                           const TextStyle(color: SlotSpyDarkTheme.textPrimary)),
                   subtitle: Text(
-                    '${gym.address} • $count session${count == 1 ? '' : 's'}',
+                    '${gym.address}${gym.provider != null ? ' • ${gym.provider!}' : ''}',
                     style: const TextStyle(color: SlotSpyDarkTheme.textSecondary)),
-                  trailing: isSelected
-                      ? const Icon(Icons.check_circle,
-                          color: SlotSpyDarkTheme.primary)
-                      : null,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '$count',
+                        style: const TextStyle(
+                            color: SlotSpyDarkTheme.textSecondary)),
+                      if (isSelected) ...[
+                        const SizedBox(width: 8),
+                        const Icon(Icons.check_circle,
+                            color: SlotSpyDarkTheme.primary),
+                      ],
+                    ],
+                  ),
                   onTap: () => setState(() {
                     _selectedGym = gym;
                     _watchAllSessions = false;
@@ -301,12 +341,36 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
     return Consumer<SlotProvider>(
       builder: (context, provider, _) {
         final sessions = _sessionsAtSelectedGym;
+        // For static DB gyms, show loading spinner if API sessions not yet loaded
+        final isStaticGym = _selectedGym!.provider == 'everyoneactive' ||
+            _selectedGym!.provider == 'better';
+        final apiLoaded = provider.sessionTypes.isNotEmpty ||
+            !provider.loadingSessionSeries;
+        if (isStaticGym && sessions.isEmpty && !apiLoaded) {
+          return Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              children: [
+                const CircularProgressIndicator(
+                    color: SlotSpyDarkTheme.primary),
+                const SizedBox(height: 16),
+                Text(
+                  'Loading sessions at ${_selectedGym!.name}...',
+                  style: const TextStyle(
+                      color: SlotSpyDarkTheme.textSecondary),
+                ),
+              ],
+            ),
+          );
+        }
         if (sessions.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(16),
+          return Padding(
+            padding: const EdgeInsets.all(16),
             child: Text(
-              'No sessions found at this gym.',
-              style: TextStyle(color: SlotSpyDarkTheme.textSecondary),
+              isStaticGym
+                  ? 'No sessions found for ${_selectedGym!.name} in the cached data. Sessions will appear once the app polls the ${_selectedGym!.provider} feed.'
+                  : 'No sessions found at this gym.',
+              style: const TextStyle(color: SlotSpyDarkTheme.textSecondary),
             ),
           );
         }

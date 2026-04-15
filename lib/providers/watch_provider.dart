@@ -12,6 +12,7 @@ import '../services/database_service.dart';
 import '../services/rpde_service.dart';
 import '../services/notification_service.dart';
 import '../data/gym_link_bank.dart';
+import '../data/venue_database.dart';
 
 class WatchProvider extends ChangeNotifier {
   final DatabaseService _db;
@@ -191,6 +192,22 @@ class SlotProvider extends ChangeNotifier {
     return _gyms.where((g) {
       return g.name.toLowerCase().contains(q) ||
           g.address.toLowerCase().contains(q);
+    }).toList();
+  }
+
+  /// Pre-seeded static gym database — available immediately without any API call.
+  List<Gym> get staticGyms => VenueDatabase.gyms;
+
+  /// Returns all sessions at a given gym.
+  /// For Everyone Active / Better (GLL) static gyms, matches by gym name.
+  /// For API gyms, matches by gym id or name.
+  List<SessionType> sessionsAtGym(String gymName, String? provider) {
+    final q = gymName.toLowerCase();
+    return _sessionTypes.where((st) {
+      if (provider == 'everyoneactive' || provider == 'better') {
+        return st.gym.name.toLowerCase() == q;
+      }
+      return st.gym.id == gymName || st.gym.name.toLowerCase() == q;
     }).toList();
   }
 }
@@ -407,6 +424,18 @@ class PollingService extends ChangeNotifier {
     }
 
     return true;
+  }
+
+  /// Find a static gym by name (case-insensitive).
+  Gym? findStaticGymByName(String name) {
+    final q = name.toLowerCase();
+    try {
+      return VenueDatabase.gyms.firstWhere(
+        (g) => g.name.toLowerCase() == q || g.id == name,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   // Stream controller for slot matches

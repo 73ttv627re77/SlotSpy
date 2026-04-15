@@ -4,6 +4,10 @@ class Gym {
   final String address;
   final double lat;
   final double lon;
+  /// Provider name: 'everyoneactive' or 'better'.
+  final String? provider;
+  /// OpenActive session-series feed URL for this provider.
+  final String? sessionFeedUrl;
 
   Gym({
     required this.id,
@@ -11,6 +15,8 @@ class Gym {
     required this.address,
     required this.lat,
     required this.lon,
+    this.provider,
+    this.sessionFeedUrl,
   });
 
   factory Gym.fromSessionSeries(Map<String, dynamic> data) {
@@ -23,6 +29,29 @@ class Gym {
       address: _formatAddress(address),
       lat: (geo['latitude'] ?? 0.0).toDouble(),
       lon: (geo['longitude'] ?? 0.0).toDouble(),
+      provider: null,
+      sessionFeedUrl: null,
+    );
+  }
+
+  /// Create a Gym from a static VenueDatabase entry.
+  factory Gym.fromVenueDbEntry({
+    required String id,
+    required String name,
+    required String address,
+    required double lat,
+    required double lon,
+    required String? provider,
+    required String? sessionFeedUrl,
+  }) {
+    return Gym(
+      id: id,
+      name: name,
+      address: address,
+      lat: lat,
+      lon: lon,
+      provider: provider,
+      sessionFeedUrl: sessionFeedUrl,
     );
   }
 

@@ -20,6 +20,8 @@ class GymLink {
   /// If true, slot.@id IS the direct booking URL (use it directly).
   /// If false, construct URL from baseUrl + bookingPathTemplate + facilityId.
   final bool useSlotIdDirectly;
+  /// OpenActive session-series feed URL for this provider.
+  final String? sessionFeedUrl;
 
   const GymLink({
     required this.provider,
@@ -28,6 +30,7 @@ class GymLink {
     required this.baseUrl,
     required this.bookingPathTemplate,
     this.useSlotIdDirectly = false,
+    this.sessionFeedUrl,
   });
 
   /// Build the booking URL for a given slot.
@@ -65,6 +68,7 @@ class GymLinkBank {
       baseUrl: 'https://better-admin.org.uk',
       bookingPathTemplate: '/booking?facility={facilityId}',
       useSlotIdDirectly: false,
+      sessionFeedUrl: 'https://better-admin.org.uk/api/openactive/better/session-series',
     ),
   };
 
