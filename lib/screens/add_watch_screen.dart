@@ -18,8 +18,9 @@ class AddWatchScreen extends StatefulWidget {
 class _AddWatchScreenState extends State<AddWatchScreen> {
   int _currentStep = 0;
   Gym? _selectedGym;
-  SessionType? _selectedSessionType;
-  String _sessionNamePattern = '';
+  String _gymSearchQuery = '';
+  bool _watchAllSessions = false;
+  Set<String> _selectedSessionPatterns = {};
   Set<int> _selectedDays = {};
   TimeOfDay? _earliestTime;
   TimeOfDay? _latestTime;
@@ -32,7 +33,7 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
     super.initState();
     if (_isEditing) {
       final w = widget.watchToEdit!;
-      _sessionNamePattern = w.sessionNamePattern ?? '';
+      _selectedGym = _findGymById(w.gymId);
       _selectedDays = w.daysOfWeek ?? {};
       _earliestTime = w.earliestTime != null
           ? TimeOfDay(hour: w.earliestTime!.hour, minute: w.earliestTime!.minute)
@@ -41,6 +42,16 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
           ? TimeOfDay(hour: w.latestTime!.hour, minute: w.latestTime!.minute)
           : null;
       _notificationsEnabled = w.notificationsEnabled;
+      if (w.sessionPatterns != null && w.sessionPatterns!.isNotEmpty) {
+        _selectedSessionPatterns = w.sessionPatterns!.toSet();
+        _watchAllSessions = false;
+      } else if (w.sessionNamePattern != null && w.sessionNamePattern!.isNotEmpty) {
+        // Backward compat: single pattern from legacy watch
+        _selectedSessionPatterns = {w.sessionNamePattern!};
+        _watchAllSessions = false;
+      } else {
+        _watchAllSessions = true; // no specific sessions → watch all
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         context.read<SlotProvider>().loadCachedSessionSeries();
       });
@@ -49,6 +60,36 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
         context.read<SlotProvider>().loadCachedSessionSeries();
       });
     }
+  }
+
+  Gym? _findGymById(String? id) {
+    if (id == null) return null;
+    final provider = context.read<SlotProvider>();
+    try {
+      return provider.gyms.firstWhere((g) => g.id == id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<Gym> get _filteredGyms {
+    final provider = context.read<SlotProvider>();
+    if (_gymSearchQuery.isEmpty) return provider.gyms;
+    final q = _gymSearchQuery.toLowerCase();
+    return provider.gyms.where((g) {
+      return g.name.toLowerCase().contains(q) ||
+          g.address.toLowerCase().contains(q);
+    }).toList();
+  }
+
+  List<SessionType> get _sessionsAtSelectedGym {
+    if (_selectedGym == null) return [];
+    final provider = context.read<SlotProvider>();
+    return provider.sessionTypes.where((st) => st.gym.id == _selectedGym!.id).toList();
+  }
+
+  int _sessionCountForGym(Gym gym, List<SessionType> allSessions) {
+    return allSessions.where((st) => st.gym.id == gym.id).length;
   }
 
   @override
@@ -106,26 +147,30 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
         },
         steps: [
           Step(
-            title: const Text('Session Type',
-                style: TextStyle(color: SlotSpyDarkTheme.textPrimary)),
-            subtitle: Text(
-              _sessionNamePattern.isNotEmpty ? _sessionNamePattern : 'Any session',
-              style: const TextStyle(color: SlotSpyDarkTheme.textSecondary),
-            ),
-            isActive: _currentStep >= 0,
-            state: _currentStep > 0 ? StepState.complete : StepState.indexed,
-            content: _buildSessionTypeStep(),
-          ),
-          Step(
             title: const Text('Gym',
                 style: TextStyle(color: SlotSpyDarkTheme.textPrimary)),
             subtitle: Text(
               _selectedGym?.name ?? 'Any gym',
               style: const TextStyle(color: SlotSpyDarkTheme.textSecondary),
             ),
+            isActive: _currentStep >= 0,
+            state: _currentStep > 0 ? StepState.complete : StepState.indexed,
+            content: _buildGymStep(),
+          ),
+          Step(
+            title: const Text('Session',
+                style: TextStyle(color: SlotSpyDarkTheme.textPrimary)),
+            subtitle: Text(
+              _watchAllSessions
+                  ? 'Watch all sessions'
+                  : _selectedSessionPatterns.isEmpty
+                      ? 'Any session'
+                      : '${_selectedSessionPatterns.length} session(s)',
+              style: const TextStyle(color: SlotSpyDarkTheme.textSecondary),
+            ),
             isActive: _currentStep >= 1,
             state: _currentStep > 1 ? StepState.complete : StepState.indexed,
-            content: _buildGymStep(),
+            content: _buildSessionStep(),
           ),
           Step(
             title: const Text('Time Preferences',
@@ -152,113 +197,61 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
     );
   }
 
-  Widget _buildSessionTypeStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          decoration: InputDecoration(
-            hintText: 'Search sessions (e.g. Badminton, Gym)',
-            prefixIcon:
-                const Icon(Icons.search, color: SlotSpyDarkTheme.textSecondary),
-            filled: true,
-            fillColor: SlotSpyDarkTheme.surfaceLight,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
-          style: const TextStyle(color: SlotSpyDarkTheme.textPrimary),
-          onChanged: (v) => setState(() => _sessionNamePattern = v),
-        ),
-        const SizedBox(height: 16),
-        Consumer<SlotProvider>(
-          builder: (context, provider, _) {
-            if (provider.loadingSessionSeries) {
-              return const Center(
-                  child: CircularProgressIndicator(
-                      color: SlotSpyDarkTheme.primary));
-            }
-            final types = provider.searchSessionTypes(_sessionNamePattern);
-            if (types.isEmpty && provider.sessionTypes.isEmpty) {
-              return const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'No session types loaded yet. You can continue without selecting one.',
-                  style: TextStyle(color: SlotSpyDarkTheme.textSecondary),
-                ),
-              );
-            }
-            return ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: types.length,
-              itemBuilder: (context, index) {
-                final st = types[index];
-                final isSelected = _selectedSessionType?.id == st.id;
-                return Card(
-                  elevation: 0,
-                  color: isSelected
-                      ? SlotSpyDarkTheme.primary.withValues(alpha: 0.15)
-                      : SlotSpyDarkTheme.surface,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: isSelected
-                        ? const BorderSide(color: SlotSpyDarkTheme.primary)
-                        : BorderSide.none,
-                  ),
-                  child: ListTile(
-                    title: Text(st.name,
-                        style:
-                            const TextStyle(color: SlotSpyDarkTheme.textPrimary)),
-                    subtitle: Text('${st.gym.name} • ${st.activity}',
-                        style: const TextStyle(
-                            color: SlotSpyDarkTheme.textSecondary)),
-                    trailing: st.price != null
-                        ? Text(
-                            '£${st.price!.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: SlotSpyDarkTheme.success,
-                            ),
-                          )
-                        : null,
-                    onTap: () {
-                      setState(() {
-                        _selectedSessionType = isSelected ? null : st;
-                        _selectedGym = st.gym;
-                      });
-                    },
-                  ),
-                );
-              },
-            );
-          },
-        ),
-      ],
-    );
-  }
-
   Widget _buildGymStep() {
     return Consumer<SlotProvider>(
       builder: (context, provider, _) {
+        final allSessions = provider.sessionTypes;
+        final gyms = _filteredGyms;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ListTile(
-              title: const Text('Any gym',
-                  style: TextStyle(color: SlotSpyDarkTheme.textPrimary)),
-              leading: Radio<String?>(
-                value: null,
-                groupValue: _selectedGym?.id,
-                activeColor: SlotSpyDarkTheme.primary,
-                onChanged: (_) => setState(() => _selectedGym = null),
+            TextField(
+              decoration: InputDecoration(
+                hintText: 'Search gyms by name...',
+                prefixIcon:
+                    const Icon(Icons.search, color: SlotSpyDarkTheme.textSecondary),
+                filled: true,
+                fillColor: SlotSpyDarkTheme.surfaceLight,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
               ),
-              onTap: () => setState(() => _selectedGym = null),
+              style: const TextStyle(color: SlotSpyDarkTheme.textPrimary),
+              onChanged: (v) => setState(() => _gymSearchQuery = v),
+            ),
+            const SizedBox(height: 16),
+            // "Any gym" option
+            Card(
+              elevation: 0,
+              color: _selectedGym == null
+                  ? SlotSpyDarkTheme.primary.withValues(alpha: 0.15)
+                  : SlotSpyDarkTheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: _selectedGym == null
+                    ? const BorderSide(color: SlotSpyDarkTheme.primary)
+                    : BorderSide.none,
+              ),
+              child: ListTile(
+                title: const Text('Any gym',
+                    style: TextStyle(color: SlotSpyDarkTheme.textPrimary)),
+                subtitle: const Text('Match any gym',
+                    style: TextStyle(color: SlotSpyDarkTheme.textSecondary)),
+                trailing: _selectedGym == null
+                    ? const Icon(Icons.check_circle, color: SlotSpyDarkTheme.primary)
+                    : null,
+                onTap: () => setState(() {
+                  _selectedGym = null;
+                  _watchAllSessions = true;
+                  _selectedSessionPatterns = {};
+                }),
+              ),
             ),
             const Divider(color: SlotSpyDarkTheme.surfaceLight),
-            ...provider.gyms.map((gym) {
+            ...gyms.map((gym) {
               final isSelected = _selectedGym?.id == gym.id;
+              final count = _sessionCountForGym(gym, allSessions);
               return Card(
                 elevation: 0,
                 color: isSelected
@@ -274,17 +267,117 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
                   title: Text(gym.name,
                       style:
                           const TextStyle(color: SlotSpyDarkTheme.textPrimary)),
-                  subtitle: Text(gym.address,
-                      style:
-                          const TextStyle(color: SlotSpyDarkTheme.textSecondary)),
+                  subtitle: Text(
+                    '${gym.address} • $count session${count == 1 ? '' : 's'}',
+                    style: const TextStyle(color: SlotSpyDarkTheme.textSecondary)),
                   trailing: isSelected
                       ? const Icon(Icons.check_circle,
                           color: SlotSpyDarkTheme.primary)
                       : null,
-                  onTap: () => setState(() => _selectedGym = gym),
+                  onTap: () => setState(() {
+                    _selectedGym = gym;
+                    _watchAllSessions = false;
+                    _selectedSessionPatterns = {};
+                  }),
                 ),
               );
             }),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSessionStep() {
+    if (_selectedGym == null) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text(
+          'Pick a specific gym to select sessions.',
+          style: TextStyle(color: SlotSpyDarkTheme.textSecondary),
+        ),
+      );
+    }
+    return Consumer<SlotProvider>(
+      builder: (context, provider, _) {
+        final sessions = _sessionsAtSelectedGym;
+        if (sessions.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              'No sessions found at this gym.',
+              style: TextStyle(color: SlotSpyDarkTheme.textSecondary),
+            ),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // "Watch all sessions" checkbox
+            CheckboxListTile(
+              value: _watchAllSessions,
+              onChanged: (v) => setState(() {
+                _watchAllSessions = v ?? false;
+                if (_watchAllSessions) {
+                  _selectedSessionPatterns = {};
+                }
+              }),
+              title: const Text('Watch all sessions at this gym',
+                  style: TextStyle(color: SlotSpyDarkTheme.textPrimary)),
+              subtitle: Text('(${sessions.length} session${sessions.length == 1 ? '' : 's'})',
+                  style: const TextStyle(color: SlotSpyDarkTheme.textSecondary)),
+              activeColor: SlotSpyDarkTheme.primary,
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+            ),
+            const SizedBox(height: 8),
+            const Divider(color: SlotSpyDarkTheme.surfaceLight),
+            const SizedBox(height: 8),
+            // Session list (multi-select)
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: sessions.length,
+              itemBuilder: (context, index) {
+                final st = sessions[index];
+                final isSelected = _selectedSessionPatterns.contains(st.name);
+                return Card(
+                  elevation: 0,
+                  color: isSelected
+                      ? SlotSpyDarkTheme.primary.withValues(alpha: 0.15)
+                      : SlotSpyDarkTheme.surface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: isSelected
+                        ? const BorderSide(color: SlotSpyDarkTheme.primary)
+                        : BorderSide.none,
+                  ),
+                  child: ListTile(
+                    title: Text(st.name,
+                        style:
+                            const TextStyle(color: SlotSpyDarkTheme.textPrimary)),
+                    subtitle: Text(
+                      '${st.activity}${st.price != null ? ' • £${st.price!.toStringAsFixed(2)}' : ''}',
+                      style:
+                          const TextStyle(color: SlotSpyDarkTheme.textSecondary)),
+                    trailing: isSelected
+                        ? const Icon(Icons.check_circle,
+                            color: SlotSpyDarkTheme.primary)
+                        : null,
+                    onTap: () {
+                      setState(() {
+                        _watchAllSessions = false;
+                        if (isSelected) {
+                          _selectedSessionPatterns.remove(st.name);
+                        } else {
+                          _selectedSessionPatterns.add(st.name);
+                        }
+                      });
+                    },
+                  ),
+                );
+              },
+            ),
           ],
         );
       },
@@ -435,8 +528,14 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              _reviewRow('Session', watch.sessionNamePattern ?? 'Any session'),
               _reviewRow('Gym', watch.gymName ?? 'Any gym'),
+              _reviewRow(
+                  'Sessions',
+                  _watchAllSessions
+                      ? 'All sessions at this gym'
+                      : _selectedSessionPatterns.isEmpty
+                          ? 'Any session'
+                          : _selectedSessionPatterns.join(', ')),
               _reviewRow('Days', _selectedDays.isEmpty
                   ? 'Any day'
                   : _daysSummary(_selectedDays)),
@@ -506,8 +605,8 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
       id: widget.watchToEdit?.id,
       gymId: _selectedGym?.id,
       gymName: _selectedGym?.name,
-      sessionNamePattern:
-          _sessionNamePattern.isNotEmpty ? _sessionNamePattern : null,
+      sessionPatterns:
+          _watchAllSessions ? null : (_selectedSessionPatterns.isNotEmpty ? _selectedSessionPatterns.toList() : null),
       daysOfWeek: _selectedDays.isNotEmpty ? _selectedDays : null,
       earliestTime: _earliestTime,
       latestTime: _latestTime,

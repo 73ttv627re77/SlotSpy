@@ -5,7 +5,8 @@ class Watch {
   final String id;
   final String? gymId;
   final String? gymName;
-  final String? sessionNamePattern;
+  final String? sessionNamePattern; // single pattern (backward compat)
+  final List<String>? sessionPatterns; // list of exact session names to watch
   final Set<int>? daysOfWeek; // 1=Monday, 7=Sunday
   final TimeOfDay? earliestTime;
   final TimeOfDay? latestTime;
@@ -18,6 +19,7 @@ class Watch {
     this.gymId,
     this.gymName,
     this.sessionNamePattern,
+    this.sessionPatterns,
     this.daysOfWeek,
     this.earliestTime,
     this.latestTime,
@@ -31,6 +33,7 @@ class Watch {
     String? gymId,
     String? gymName,
     String? sessionNamePattern,
+    List<String>? sessionPatterns,
     Set<int>? daysOfWeek,
     TimeOfDay? earliestTime,
     TimeOfDay? latestTime,
@@ -42,6 +45,7 @@ class Watch {
       gymId: gymId ?? this.gymId,
       gymName: gymName ?? this.gymName,
       sessionNamePattern: sessionNamePattern ?? this.sessionNamePattern,
+      sessionPatterns: sessionPatterns ?? this.sessionPatterns,
       daysOfWeek: daysOfWeek ?? this.daysOfWeek,
       earliestTime: earliestTime ?? this.earliestTime,
       latestTime: latestTime ?? this.latestTime,
@@ -57,6 +61,7 @@ class Watch {
       'gymId': gymId,
       'gymName': gymName,
       'sessionNamePattern': sessionNamePattern,
+      'sessionPatterns': sessionPatterns,
       'daysOfWeek': daysOfWeek?.toList(),
       'earliestTimeHour': earliestTime?.hour,
       'earliestTimeMinute': earliestTime?.minute,
@@ -88,6 +93,7 @@ class Watch {
       gymId: json['gymId'] as String?,
       gymName: json['gymName'] as String?,
       sessionNamePattern: json['sessionNamePattern'] as String?,
+      sessionPatterns: (json['sessionPatterns'] as List?)?.map((e) => e as String).toList(),
       daysOfWeek: (json['daysOfWeek'] as List?)?.map((e) => e as int).toSet(),
       earliestTime: earliest,
       latestTime: latest,
@@ -108,6 +114,9 @@ class Watch {
     }
     if (sessionNamePattern != null && sessionNamePattern!.isNotEmpty) {
       parts.add(sessionNamePattern!);
+    }
+    if (sessionPatterns != null && sessionPatterns!.isNotEmpty) {
+      parts.add(sessionPatterns!.join(', '));
     }
     if (daysOfWeek != null && daysOfWeek!.isNotEmpty) {
       parts.add(_daysSummary(daysOfWeek!));

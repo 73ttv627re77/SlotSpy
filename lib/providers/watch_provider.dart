@@ -361,7 +361,17 @@ class PollingService extends ChangeNotifier {
       if (sessionType.gym.id != watch.gymId) return false;
     }
 
-    // Session name pattern match
+    // Session patterns match — list of exact session names (new flow)
+    if (watch.sessionPatterns != null && watch.sessionPatterns!.isNotEmpty) {
+      final sessionType = slotProvider.getSessionTypeForSlot(slot);
+      if (sessionType == null) return false;
+      if (!watch.sessionPatterns!.any(
+          (p) => sessionType.name.toLowerCase() == p.toLowerCase())) {
+        return false;
+      }
+    }
+
+    // Session name pattern match (backward compat with legacy single-pattern watches)
     if (watch.sessionNamePattern != null &&
         watch.sessionNamePattern!.isNotEmpty) {
       final sessionType = slotProvider.getSessionTypeForSlot(slot);
