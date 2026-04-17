@@ -1,7 +1,7 @@
 name: slotspy
 description: Gym slot cancellation monitor — never miss a gym slot again.
 publish_to: 'none'
-version: 1.0.0+55
+version: 1.0.0+69
 
 environment:
   sdk: ^3.0.0

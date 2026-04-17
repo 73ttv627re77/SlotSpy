@@ -233,15 +233,23 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             TextField(
+              autocorrect: false,
+              enableSuggestions: false,
+              spellCheckConfiguration: const SpellCheckConfiguration.disabled(),
               decoration: InputDecoration(
                 hintText: 'Search gyms by name...',
+                hintStyle: const TextStyle(color: Color(0xFF8A8A8A)),
                 prefixIcon:
-                    const Icon(Icons.search, color: SlotSpyDarkTheme.textSecondary),
+                    const Icon(Icons.search, color: Color(0xFF8A8A8A)),
                 filled: true,
                 fillColor: SlotSpyDarkTheme.surfaceLight,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: SlotSpyDarkTheme.primary, width: 1.5),
                 ),
               ),
               style: const TextStyle(color: SlotSpyDarkTheme.textPrimary),

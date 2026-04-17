@@ -46,6 +46,16 @@ class DatabaseService {
     ''');
 
     await db.execute('''
+      CREATE TABLE session_types_cache (
+        gym_id TEXT PRIMARY KEY,
+        gym_name TEXT,
+        session_type_names TEXT,
+        all_data TEXT,
+        updated_at TEXT
+      )
+    ''');
+
+    await db.execute('''
       CREATE TABLE watches (
         id TEXT PRIMARY KEY,
         data TEXT,
@@ -212,6 +222,62 @@ class DatabaseService {
     return results
         .map((row) => jsonDecode(row['data'] as String) as Map<String, dynamic>)
         .toList();
+  }
+
+  /// Save all session types for a specific gym, keyed by gym_id.
+  /// sessionTypeNames: distinct session type display names (e.g. ["Gym 14-15 Yrs", "PT Taster Session"])
+  /// allData: full JSON array of all session-series items for this gym
+  Future<void> saveSessionTypesForGym({
+    required String gymId,
+    required String gymName,
+    required List<String> sessionTypeNames,
+    required List<Map<String, dynamic>> allData,
+  }) async {
+    final database = await db;
+    await database.insert(
+      'session_types_cache',
+      {
+        'gym_id': gymId,
+        'gym_name': gymName,
+        'session_type_names': jsonEncode(sessionTypeNames),
+        'all_data': jsonEncode(allData),
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Get cached session type names for a gym. Returns null if not cached.
+  Future<List<String>?> getSessionTypeNamesForGym(String gymId) async {
+    final database = await db;
+    final results = await database.query(
+      'session_types_cache',
+      where: 'gym_id = ?',
+      whereArgs: [gymId],
+    );
+    if (results.isEmpty) return null;
+    final names = jsonDecode(results.first['session_type_names'] as String) as List;
+    return names.cast<String>();
+  }
+
+  /// Get all cached session types for a gym (full data, for future use).
+  Future<List<Map<String, dynamic>>?> getAllDataForGym(String gymId) async {
+    final database = await db;
+    final results = await database.query(
+      'session_types_cache',
+      where: 'gym_id = ?',
+      whereArgs: [gymId],
+    );
+    if (results.isEmpty) return null;
+    final data = jsonDecode(results.first['all_data'] as String) as List;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  /// Check if session_types_cache has any data.
+  Future<bool> hasSessionTypesCache() async {
+    final database = await db;
+    final results = await database.query('session_types_cache', limit: 1);
+    return results.isNotEmpty;
   }
 
   // Watch methods
