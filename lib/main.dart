@@ -11,6 +11,7 @@ import 'services/database_service.dart';
 import 'services/rpde_service.dart';
 import 'services/backend_service.dart';
 import 'services/notification_service.dart';
+import 'services/push_service.dart';
 import 'providers/watch_provider.dart';
 import 'screens/home_screen.dart';
 import 'widgets/alert_overlay.dart';
@@ -40,6 +41,10 @@ void main() async {
 
   await notifications.initialize();
   await notifications.requestPermissions();
+
+  final push = PushService(notifications);
+  push.setBackend(backend);
+  await push.initialize();
 
   // Initialize home widget
   await _initHomeWidget();

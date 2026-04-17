@@ -107,4 +107,18 @@ class BackendService {
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     return (data['watches'] as List? ?? []).cast<Map<String, dynamic>>();
   }
+
+  /// POST /devices/ — registers an APNs device token with the backend.
+  Future<void> registerDevice({required String token, required String platform}) async {
+    final res = await http
+        .post(
+          Uri.parse('$_base/devices/'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': token, 'platform': platform}),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode >= 400) {
+      throw Exception('Backend /devices/ POST failed: ${res.statusCode}');
+    }
+  }
 }

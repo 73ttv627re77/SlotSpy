@@ -1,5 +1,6 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class NotificationService {
   final FlutterLocalNotificationsPlugin _notifications =
@@ -31,7 +32,17 @@ class NotificationService {
   }
 
   void _onNotificationTap(NotificationResponse response) {
-    // Handle notification tap - can be extended to navigate to specific screen
+    final payload = response.payload;
+    if (payload != null && payload.startsWith('http')) {
+      _launchUrl(payload);
+    }
+  }
+
+  void _launchUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri != null) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   Future<void> requestPermissions() async {
