@@ -37,7 +37,7 @@ class BackendService {
   /// GET /session-types?gym_id=X — returns raw session types for a gym.
   Future<List<Map<String, dynamic>>> fetchSessionTypes(String gymId) async {
     final res = await http
-        .get(Uri.parse('$_base/session-types?gym_id=$gymId'))
+        .get(Uri.parse('$_base/session-types').replace(queryParameters: {'gym_id': gymId}))
         .timeout(const Duration(seconds: 30));
     if (res.statusCode != 200) {
       throw Exception('Backend /session-types failed: ${res.statusCode}');
@@ -48,9 +48,11 @@ class BackendService {
 
   /// GET /slots or GET /slots?gym_id=X — returns available slots.
   Future<List<Slot>> fetchSlots({String? gymId}) async {
-    final path = gymId != null ? '$_base/slots?gym_id=$gymId' : '$_base/slots';
+    final uri = gymId != null
+        ? Uri.parse('$_base/slots').replace(queryParameters: {'gym_id': gymId})
+        : Uri.parse('$_base/slots');
     final res = await http
-        .get(Uri.parse(path))
+        .get(uri)
         .timeout(const Duration(seconds: 30));
     if (res.statusCode != 200) {
       throw Exception('Backend /slots failed: ${res.statusCode}');
