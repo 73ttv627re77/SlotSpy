@@ -24,14 +24,20 @@ class BackendService {
 
   /// GET /gyms/ — returns raw gym list from backend.
   Future<List<Map<String, dynamic>>> fetchGyms() async {
-    final res = await http
-        .get(Uri.parse('$_base/gyms/'))
-        .timeout(const Duration(seconds: 30));
-    if (res.statusCode != 200) {
-      throw Exception('Backend /gyms/ failed: ${res.statusCode}');
+    try {
+      final res = await http
+          .get(Uri.parse('$_base/gyms/'))
+          .timeout(const Duration(seconds: 30));
+      if (res.statusCode != 200) {
+        throw Exception('Backend /gyms/ failed: ${res.statusCode}');
+      }
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return (data['gyms'] as List? ?? []).cast<Map<String, dynamic>>();
+    } on Exception {
+      rethrow;
+    } catch (e) {
+      throw Exception('Failed to fetch gyms: $e');
     }
-    final data = jsonDecode(res.body) as Map<String, dynamic>;
-    return (data['gyms'] as List? ?? []).cast<Map<String, dynamic>>();
   }
 
   /// GET /session-types?gym_id=X — returns raw session types for a gym.
