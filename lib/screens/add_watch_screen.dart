@@ -5,7 +5,6 @@ import '../models/watch.dart';
 import '../models/gym.dart';
 import '../models/session_type.dart';
 import '../theme/slotspy_dark_theme.dart';
-import '../data/venue_database.dart';
 
 class AddWatchScreen extends StatefulWidget {
   final Watch? watchToEdit;
@@ -54,12 +53,12 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
         _watchAllSessions = true; // no specific sessions → watch all
       }
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        context.read<SlotProvider>().loadCachedSessionSeries();
+        if (_selectedGym != null) {
+          context.read<SlotProvider>().fetchSessionTypesForGym(_selectedGym!.id);
+        }
       });
     } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        context.read<SlotProvider>().loadCachedSessionSeries();
-      });
+      // New watch: gym will be selected by user in step 1
     }
   }
 
@@ -73,50 +72,22 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
     }
   }
 
-  /// Static gyms from the pre-baked database — available immediately.
-  List<Gym> get _staticGyms {
-    if (_gymSearchQuery.isEmpty) return VenueDatabase.gyms;
+  /// All gyms shown in step 1 — from the backend.
+  List<Gym> get _filteredGyms {
+    final provider = context.read<SlotProvider>();
+    if (_gymSearchQuery.isEmpty) return provider.gyms;
     final q = _gymSearchQuery.toLowerCase();
-    return VenueDatabase.gyms.where((g) {
+    return provider.gyms.where((g) {
       return g.name.toLowerCase().contains(q) ||
           g.address.toLowerCase().contains(q);
     }).toList();
   }
 
-  /// All gyms shown in step 1: static DB gyms + API gyms (deduplicated by name).
-  List<Gym> get _filteredGyms {
-    final provider = context.read<SlotProvider>();
-    // Start with static gyms
-    final staticGyms = _staticGyms;
-    // Build set of static gym names for dedup
-    final staticNames = staticGyms.map((g) => g.name.toLowerCase()).toSet();
-    // Add API gyms that aren't duplicates
-    final apiGyms = provider.gyms
-        .where((g) => !staticNames.contains(g.name.toLowerCase()))
-        .toList();
-    return [...staticGyms, ...apiGyms];
-  }
-
-  /// Sessions visible for the selected gym.
-  /// For static DB gyms (Everyone Active / Better), matches by name.
-  /// For API gyms, matches by id.
+  /// Sessions visible for the selected gym — matched by gym id.
   List<SessionType> get _sessionsAtSelectedGym {
     if (_selectedGym == null) return [];
     final provider = context.read<SlotProvider>();
-    final gym = _selectedGym!;
-    if (gym.provider == 'everyoneactive' || gym.provider == 'better') {
-      // Static gym — match by name
-      final q = gym.name.toLowerCase();
-      return provider.sessionTypes
-          .where((st) => st.gym.name.toLowerCase() == q)
-          .toList();
-    }
-    // API gym — match by id
-    return provider.sessionTypes.where((st) => st.gym.id == gym.id).toList();
-  }
-
-  int _sessionCountForGym(Gym gym, List<SessionType> allSessions) {
-    return allSessions.where((st) => st.gym.id == gym.id).length;
+    return provider.sessionTypes.where((st) => st.gym.id == _selectedGym!.id).toList();
   }
 
   @override
@@ -289,10 +260,8 @@ class _AddWatchScreenState extends State<AddWatchScreen> {
             const Divider(color: SlotSpyDarkTheme.surfaceLight),
             ...gyms.map((gym) {
               final isSelected = _selectedGym?.id == gym.id;
-              // Count API sessions for this gym
-              final count = gym.provider == 'everyoneactive' || gym.provider == 'better'
-                  ? provider.sessionsAtGym(gym.name, gym.provider).length
-                  : _sessionCountForGym(gym, allSessions);
+              // Count sessions for this gym from backend data
+              final count = provider.sessionsAtGym(gym.id).length;
               return Card(
                 elevation: 0,
                 color: isSelected
@@ -718,7 +687,7 @@ class _SessionStepContentState extends State<_SessionStepContent> {
                 OutlinedButton.icon(
                   onPressed: isLoading
                       ? null
-                      : () => provider.fetchSessionSeries(),
+                      : () => provider.fetchSessionTypesForGym(widget.gym.id),
                   icon: isLoading
                       ? const SizedBox(
                           width: 16,
@@ -772,7 +741,7 @@ class _SessionStepContentState extends State<_SessionStepContent> {
                     IconButton(
                       icon: const Icon(Icons.refresh,
                           color: SlotSpyDarkTheme.primary, size: 20),
-                      onPressed: () => provider.fetchSessionSeries(),
+                      onPressed: () => provider.fetchSessionTypesForGym(widget.gym.id),
                       tooltip: 'Refresh sessions',
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),

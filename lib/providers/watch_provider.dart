@@ -9,22 +9,19 @@ import '../models/slot.dart';
 import '../models/session_type.dart';
 import '../models/gym.dart';
 import '../services/database_service.dart';
-import '../services/rpde_service.dart';
 import '../services/backend_service.dart';
 import '../services/notification_service.dart';
 import '../data/gym_link_bank.dart';
-import '../data/venue_database.dart';
 
 class WatchProvider extends ChangeNotifier {
   final DatabaseService _db;
-  final RpdeService _rpde;
   final NotificationService _notifications;
   final BackendService? _backend;
 
   List<Watch> _watches = [];
   bool _loading = false;
 
-  WatchProvider(this._db, this._rpde, this._notifications, [this._backend]);
+  WatchProvider(this._db, this._notifications, [this._backend]);
 
   List<Watch> get watches => _watches;
   List<Watch> get activeWatches => _watches.where((w) => w.enabled).toList();
@@ -89,63 +86,89 @@ class WatchProvider extends ChangeNotifier {
 
 class SlotProvider extends ChangeNotifier {
   final DatabaseService _db;
-  final RpdeService _rpde;
   final BackendService? _backend;
 
   List<Slot> _slots = [];
   List<SessionType> _sessionTypes = [];
   List<Gym> _gyms = [];
   bool _loading = false;
-  bool _loadingSessionSeries = false;
+  bool _loadingSessionTypes = false;
   String? _error;
   int _pollPage = 0;
-  String? _fetchError;
-  int _fetchPagesFetched = 0;
-  int _fetchTotalPages = 0;
-  int _fetchGymsFound = 0;
-  bool fetchProgressDebouncing = false;
 
-  void updateFetchProgress(int pageFetched, int totalPages, int gymsFound) {
-    _fetchPagesFetched = pageFetched;
-    _fetchTotalPages = totalPages;
-    _fetchGymsFound = gymsFound;
-  }
-
-  SlotProvider(this._db, this._rpde, [this._backend]);
+  SlotProvider(this._db, [this._backend]);
 
   List<Slot> get slots => _slots;
   List<SessionType> get sessionTypes => _sessionTypes;
   List<Gym> get gyms => _gyms;
   bool get loading => _loading;
-  bool get loadingSessionSeries => _loadingSessionSeries;
+  bool get loadingSessionSeries => _loadingSessionTypes;
   String? get error => _error;
   int get pollPage => _pollPage;
-  int get fetchPagesFetched => _fetchPagesFetched;
-  int get fetchTotalPages => _fetchTotalPages;
-  int get fetchGymsFound => _fetchGymsFound;
-  String? get fetchError => _fetchError;
 
   List<Slot> get availableSlots =>
       _slots.where((s) => s.remainingUses >= 1).toList();
 
-  Future<void> fetchSlots() async {
+  Future<void> fetchGyms() async {
+    if (_backend == null) return;
     _loading = true;
     _error = null;
     notifyListeners();
     try {
-      if (_backend != null) {
-        _slots = await _backend!.fetchSlots();
-        if (_slots.isNotEmpty) {
-          await _db.upsertSlots(_slots);
+      final rawGyms = await _backend!.fetchGyms();
+      _gyms = rawGyms.map((g) => Gym.fromBackend(g)).toList();
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Fetch session types for a specific gym from the backend.
+  Future<void> fetchSessionTypesForGym(String gymId) async {
+    if (_backend == null) return;
+    _loadingSessionTypes = true;
+    notifyListeners();
+    try {
+      final raw = await _backend!.fetchSessionTypes(gymId);
+      _sessionTypes = raw.map((d) => SessionType.fromBackend(d)).toList();
+    } finally {
+      _loadingSessionTypes = false;
+      notifyListeners();
+    }
+  }
+
+  /// Append session types for a gym to the existing list.
+  Future<void> fetchAndAppendSessionTypes(String gymId) async {
+    if (_backend == null) return;
+    _loadingSessionTypes = true;
+    notifyListeners();
+    try {
+      final raw = await _backend!.fetchSessionTypes(gymId);
+      final newTypes = raw.map((d) => SessionType.fromBackend(d)).toList();
+      // Deduplicate by id
+      final existingIds = _sessionTypes.map((s) => s.id).toSet();
+      for (final st in newTypes) {
+        if (!existingIds.contains(st.id)) {
+          _sessionTypes.add(st);
         }
-      } else {
-        _slots = await _rpde.fetchSlots(
-          onProgress: (current, total) {
-            _pollPage = current;
-            // No notifyListeners() here — progress is internal-only
-            // and calling it per-page floods the UI thread with rebuilds.
-          },
-        );
+      }
+    } finally {
+      _loadingSessionTypes = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchSlots() async {
+    if (_backend == null) return;
+    _loading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      _slots = await _backend!.fetchSlots();
+      if (_slots.isNotEmpty) {
+        await _db.upsertSlots(_slots);
       }
       _pollPage = 0;
     } catch (e) {
@@ -156,114 +179,8 @@ class SlotProvider extends ChangeNotifier {
     }
   }
 
-  /// Progressively update session types after each page of the feed is fetched.
-  /// Debounced: only notifies listeners at most once per second to prevent
-  /// the notification storm that would otherwise freeze the UI.
-  List<SessionType>? _pendingSessionTypes;
-  bool _debouncePending = false;
-
-  void _updateSessionTypesFromPage(int page, List<SessionType> types) {
-    _pendingSessionTypes = types;
-    _gyms = types.map((s) => s.gym).toSet().toList();
-    if (_debouncePending) return;
-    _debouncePending = true;
-    Future.delayed(const Duration(milliseconds: 1000), () {
-      _debouncePending = false;
-      if (_pendingSessionTypes != null) {
-        _sessionTypes = _pendingSessionTypes!;
-        notifyListeners();
-      }
-    });
-  }
-
-  Future<void> fetchSessionSeries() async {
-    _loadingSessionSeries = true;
-    notifyListeners();
-    try {
-      // Pass the internal method as the per-page callback so the provider
-      // state stays in sync as pages arrive.
-      _rpde.onPageFetched = _updateSessionTypesFromPage;
-      _sessionTypes = await _rpde.fetchSessionSeries();
-      _gyms = _sessionTypes.map((s) => s.gym).toSet().toList();
-    } finally {
-      _loadingSessionSeries = false;
-      _rpde.onPageFetched = null;
-      notifyListeners();
-    }
-  }
-
   Future<void> loadCachedSlots() async {
     _slots = await _db.getAvailableSlots();
-    notifyListeners();
-  }
-
-  /// Load session types from the per-gym cache into state. Fast — no network.
-  Future<void> loadCachedSessionSeries() async {
-    await loadSessionTypesFromCache();
-  }
-
-  /// True if session types cache has been populated at least once.
-  Future<bool> hasSessionTypesCache() async {
-    return _db.hasSessionTypesCache();
-  }
-
-  /// Parallel-fetch all pages of the session-series feed, cache per gym,
-  /// then build session types and update state. Shows full-screen loading.
-  Future<void> fetchAndCacheAllSessionTypesParallel({
-    void Function(int pageFetched, int totalPages, int gymsFound)? onProgress,
-    int timeoutSeconds = 60,
-  }) async {
-    _loadingSessionSeries = true;
-    _fetchPagesFetched = 0;
-    _fetchTotalPages = 0;
-    _fetchGymsFound = 0;
-    _fetchError = null;
-    notifyListeners();
-    try {
-      final gymToTypes = await _rpde.fetchAndCacheAllSessionTypesPerGym(
-        onProgress: (pageFetched, totalPages, gymsFound) {
-          _fetchPagesFetched = pageFetched;
-          _fetchTotalPages = totalPages;
-          _fetchGymsFound = gymsFound;
-          onProgress?.call(pageFetched, totalPages, gymsFound);
-        },
-        timeoutSeconds: timeoutSeconds,
-      );
-      // Rebuild _sessionTypes and _gyms from the cache
-      _sessionTypes = [];
-      final gymIds = gymToTypes.keys.toList();
-      for (final gymId in gymIds) {
-        final allData = await _db.getAllDataForGym(gymId);
-        if (allData == null) continue;
-        for (final d in allData) {
-          try {
-            final gym = Gym.fromSessionSeries(d);
-            _sessionTypes.add(SessionType.fromSessionSeries(d, gym));
-          } catch (_) {}
-        }
-      }
-      _gyms = _sessionTypes.map((s) => s.gym).toSet().toList();
-    } catch (e) {
-      _fetchError = e.toString();
-    } finally {
-      _loadingSessionSeries = false;
-      notifyListeners();
-    }
-  }
-
-  /// Load session types from the per-gym cache into state. Fast — no network.
-  Future<void> loadSessionTypesFromCache() async {
-    // Load all session types from all gym caches
-    final allSessionTypes = <SessionType>[];
-    final allGymsData = await _db.getAllSessionSeries();
-    for (final d in allGymsData) {
-      try {
-        final gym = Gym.fromSessionSeries(d);
-        allSessionTypes.add(SessionType.fromSessionSeries(d, gym));
-      } catch (_) {}
-    }
-    _sessionTypes = allSessionTypes;
-    _gyms = _sessionTypes.map((s) => s.gym).toSet().toList();
     notifyListeners();
   }
 
@@ -309,20 +226,9 @@ class SlotProvider extends ChangeNotifier {
     }).toList();
   }
 
-  /// Pre-seeded static gym database — available immediately without any API call.
-  List<Gym> get staticGyms => VenueDatabase.gyms;
-
   /// Returns all sessions at a given gym.
-  /// For Everyone Active / Better (GLL) static gyms, matches by gym name.
-  /// For API gyms, matches by gym id or name.
-  List<SessionType> sessionsAtGym(String gymName, String? provider) {
-    final q = gymName.toLowerCase();
-    return _sessionTypes.where((st) {
-      if (provider == 'everyoneactive' || provider == 'better') {
-        return st.gym.name.toLowerCase() == q;
-      }
-      return st.gym.id == gymName || st.gym.name.toLowerCase() == q;
-    }).toList();
+  List<SessionType> sessionsAtGym(String gymId) {
+    return _sessionTypes.where((st) => st.gym.id == gymId).toList();
   }
 }
 
@@ -391,7 +297,6 @@ class SettingsProvider extends ChangeNotifier {
 class PollingService extends ChangeNotifier {
   Timer? _timer;
   final DatabaseService _db;
-  final RpdeService _rpde;
   final NotificationService _notifications;
 
   bool _isPolling = false;
@@ -401,7 +306,7 @@ class PollingService extends ChangeNotifier {
   SlotProvider? _slotProvider;
   WatchProvider? _watchProvider;
 
-  PollingService(this._db, this._rpde, this._notifications);
+  PollingService(this._db, this._notifications);
 
   bool get isPolling => _isPolling;
   DateTime? get lastPoll => _lastPoll;
@@ -552,18 +457,6 @@ class PollingService extends ChangeNotifier {
     }
 
     return true;
-  }
-
-  /// Find a static gym by name (case-insensitive).
-  Gym? findStaticGymByName(String name) {
-    final q = name.toLowerCase();
-    try {
-      return VenueDatabase.gyms.firstWhere(
-        (g) => g.name.toLowerCase() == q || g.id == name,
-      );
-    } catch (_) {
-      return null;
-    }
   }
 
   // Stream controller for slot matches

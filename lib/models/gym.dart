@@ -19,6 +19,19 @@ class Gym {
     this.sessionFeedUrl,
   });
 
+  /// Create a Gym from the backend API response.
+  factory Gym.fromBackend(Map<String, dynamic> data) {
+    return Gym(
+      id: data['id']?.toString() ?? '',
+      name: data['name']?.toString() ?? 'Unknown Gym',
+      address: data['address']?.toString() ?? '',
+      lat: (data['lat'] ?? data['latitude'] ?? 0.0).toDouble(),
+      lon: (data['lon'] ?? data['longitude'] ?? 0.0).toDouble(),
+      provider: data['provider']?.toString(),
+      sessionFeedUrl: data['session_feed_url']?.toString(),
+    );
+  }
+
   factory Gym.fromSessionSeries(Map<String, dynamic> data) {
     final location = data['location'] ?? {};
     final address = location['address'] ?? {};

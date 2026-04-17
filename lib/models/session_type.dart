@@ -19,6 +19,20 @@ class SessionType {
     this.url,
   });
 
+  factory SessionType.fromBackend(Map<String, dynamic> data) {
+    final gymData = data['gym'] as Map<String, dynamic>?;
+    final gym = gymData != null ? Gym.fromBackend(gymData) : Gym(id: '', name: 'Unknown Gym', address: '', lat: 0.0, lon: 0.0);
+    return SessionType(
+      id: data['id']?.toString() ?? data['@id'] ?? '',
+      name: data['name']?.toString() ?? 'Unknown Session',
+      activity: data['activity']?.toString() ?? 'Unknown',
+      gym: gym,
+      description: data['description']?.toString(),
+      price: (data['price'] as num?)?.toDouble(),
+      url: data['url']?.toString(),
+    );
+  }
+
   factory SessionType.fromSessionSeries(Map<String, dynamic> data, Gym gym) {
     final superEvent = data['superEvent'] ?? {};
     final activityArr = superEvent['activity'] ?? [];
