@@ -10,6 +10,7 @@ import '../models/session_type.dart';
 import '../models/gym.dart';
 import '../services/database_service.dart';
 import '../services/rpde_service.dart';
+import '../services/backend_service.dart';
 import '../services/notification_service.dart';
 import '../data/gym_link_bank.dart';
 import '../data/venue_database.dart';
@@ -18,11 +19,12 @@ class WatchProvider extends ChangeNotifier {
   final DatabaseService _db;
   final RpdeService _rpde;
   final NotificationService _notifications;
+  final BackendService? _backend;
 
   List<Watch> _watches = [];
   bool _loading = false;
 
-  WatchProvider(this._db, this._rpde, this._notifications);
+  WatchProvider(this._db, this._rpde, this._notifications, [this._backend]);
 
   List<Watch> get watches => _watches;
   List<Watch> get activeWatches => _watches.where((w) => w.enabled).toList();
@@ -43,6 +45,13 @@ class WatchProvider extends ChangeNotifier {
     await _db.saveWatch(watch);
     _watches.insert(0, watch);
     notifyListeners();
+    if (_backend != null) {
+      try {
+        await _backend!.registerWatch(watch);
+      } catch (_) {
+        // Backend registration is best-effort — local watch is always saved.
+      }
+    }
   }
 
   Future<void> updateWatch(Watch watch) async {
@@ -81,6 +90,7 @@ class WatchProvider extends ChangeNotifier {
 class SlotProvider extends ChangeNotifier {
   final DatabaseService _db;
   final RpdeService _rpde;
+  final BackendService? _backend;
 
   List<Slot> _slots = [];
   List<SessionType> _sessionTypes = [];
@@ -89,8 +99,19 @@ class SlotProvider extends ChangeNotifier {
   bool _loadingSessionSeries = false;
   String? _error;
   int _pollPage = 0;
+  String? _fetchError;
+  int _fetchPagesFetched = 0;
+  int _fetchTotalPages = 0;
+  int _fetchGymsFound = 0;
+  bool fetchProgressDebouncing = false;
 
-  SlotProvider(this._db, this._rpde);
+  void updateFetchProgress(int pageFetched, int totalPages, int gymsFound) {
+    _fetchPagesFetched = pageFetched;
+    _fetchTotalPages = totalPages;
+    _fetchGymsFound = gymsFound;
+  }
+
+  SlotProvider(this._db, this._rpde, [this._backend]);
 
   List<Slot> get slots => _slots;
   List<SessionType> get sessionTypes => _sessionTypes;
@@ -99,6 +120,10 @@ class SlotProvider extends ChangeNotifier {
   bool get loadingSessionSeries => _loadingSessionSeries;
   String? get error => _error;
   int get pollPage => _pollPage;
+  int get fetchPagesFetched => _fetchPagesFetched;
+  int get fetchTotalPages => _fetchTotalPages;
+  int get fetchGymsFound => _fetchGymsFound;
+  String? get fetchError => _fetchError;
 
   List<Slot> get availableSlots =>
       _slots.where((s) => s.remainingUses >= 1).toList();
@@ -108,13 +133,20 @@ class SlotProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      _slots = await _rpde.fetchSlots(
-        onProgress: (current, total) {
-          _pollPage = current;
-          // No notifyListeners() here — progress is internal-only
-          // and calling it per-page floods the UI thread with rebuilds.
-        },
-      );
+      if (_backend != null) {
+        _slots = await _backend!.fetchSlots();
+        if (_slots.isNotEmpty) {
+          await _db.upsertSlots(_slots);
+        }
+      } else {
+        _slots = await _rpde.fetchSlots(
+          onProgress: (current, total) {
+            _pollPage = current;
+            // No notifyListeners() here — progress is internal-only
+            // and calling it per-page floods the UI thread with rebuilds.
+          },
+        );
+      }
       _pollPage = 0;
     } catch (e) {
       _error = e.toString();
@@ -165,15 +197,72 @@ class SlotProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Load session types from the per-gym cache into state. Fast — no network.
   Future<void> loadCachedSessionSeries() async {
-    final data = await _db.getAllSessionSeries();
-    _sessionTypes = [];
-    for (final d in data) {
+    await loadSessionTypesFromCache();
+  }
+
+  /// True if session types cache has been populated at least once.
+  Future<bool> hasSessionTypesCache() async {
+    return _db.hasSessionTypesCache();
+  }
+
+  /// Parallel-fetch all pages of the session-series feed, cache per gym,
+  /// then build session types and update state. Shows full-screen loading.
+  Future<void> fetchAndCacheAllSessionTypesParallel({
+    void Function(int pageFetched, int totalPages, int gymsFound)? onProgress,
+    int timeoutSeconds = 60,
+  }) async {
+    _loadingSessionSeries = true;
+    _fetchPagesFetched = 0;
+    _fetchTotalPages = 0;
+    _fetchGymsFound = 0;
+    _fetchError = null;
+    notifyListeners();
+    try {
+      final gymToTypes = await _rpde.fetchAndCacheAllSessionTypesPerGym(
+        onProgress: (pageFetched, totalPages, gymsFound) {
+          _fetchPagesFetched = pageFetched;
+          _fetchTotalPages = totalPages;
+          _fetchGymsFound = gymsFound;
+          onProgress?.call(pageFetched, totalPages, gymsFound);
+        },
+        timeoutSeconds: timeoutSeconds,
+      );
+      // Rebuild _sessionTypes and _gyms from the cache
+      _sessionTypes = [];
+      final gymIds = gymToTypes.keys.toList();
+      for (final gymId in gymIds) {
+        final allData = await _db.getAllDataForGym(gymId);
+        if (allData == null) continue;
+        for (final d in allData) {
+          try {
+            final gym = Gym.fromSessionSeries(d);
+            _sessionTypes.add(SessionType.fromSessionSeries(d, gym));
+          } catch (_) {}
+        }
+      }
+      _gyms = _sessionTypes.map((s) => s.gym).toSet().toList();
+    } catch (e) {
+      _fetchError = e.toString();
+    } finally {
+      _loadingSessionSeries = false;
+      notifyListeners();
+    }
+  }
+
+  /// Load session types from the per-gym cache into state. Fast — no network.
+  Future<void> loadSessionTypesFromCache() async {
+    // Load all session types from all gym caches
+    final allSessionTypes = <SessionType>[];
+    final allGymsData = await _db.getAllSessionSeries();
+    for (final d in allGymsData) {
       try {
         final gym = Gym.fromSessionSeries(d);
-        _sessionTypes.add(SessionType.fromSessionSeries(d, gym));
+        allSessionTypes.add(SessionType.fromSessionSeries(d, gym));
       } catch (_) {}
     }
+    _sessionTypes = allSessionTypes;
     _gyms = _sessionTypes.map((s) => s.gym).toSet().toList();
     notifyListeners();
   }
@@ -245,6 +334,8 @@ class SettingsProvider extends ChangeNotifier {
   static const _keyKeepAwake = 'keep_awake_enabled';
   static const _keyAutoOpenBooking = 'auto_open_booking_enabled';
   static const _keyCountdownDuration = 'countdown_duration_seconds';
+  static const _keyBackendUrl = 'backend_url';
+  static const _keyUseCustomBackend = 'use_custom_backend';
 
   SettingsProvider(this._prefs);
 
@@ -253,6 +344,8 @@ class SettingsProvider extends ChangeNotifier {
   bool get keepAwakeEnabled => _prefs.getBool(_keyKeepAwake) ?? true;
   bool get autoOpenBookingEnabled => _prefs.getBool(_keyAutoOpenBooking) ?? true;
   int get countdownDurationSeconds => _prefs.getInt(_keyCountdownDuration) ?? 30;
+  String? get backendUrl => _prefs.getString(_keyBackendUrl);
+  bool get useCustomBackend => _prefs.getBool(_keyUseCustomBackend) ?? false;
 
   Future<void> setPollInterval(int minutes) async {
     await _prefs.setInt(_keyPollInterval, minutes);
@@ -281,6 +374,16 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<void> setCountdownDuration(int seconds) async {
     await _prefs.setInt(_keyCountdownDuration, seconds);
+    notifyListeners();
+  }
+
+  Future<void> setBackendUrl(String? url) async {
+    await _prefs.setString(_keyBackendUrl, url ?? '');
+    notifyListeners();
+  }
+
+  Future<void> setUseCustomBackend(bool enabled) async {
+    await _prefs.setBool(_keyUseCustomBackend, enabled);
     notifyListeners();
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/watch_provider.dart';
+import '../services/backend_service.dart';
 import '../theme/slotspy_dark_theme.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -94,6 +95,29 @@ class SettingsScreen extends StatelessWidget {
                   value: settings.keepAwakeEnabled,
                   onChanged: (v) => settings.setKeepAwake(v),
                   activeColor: SlotSpyDarkTheme.primary,
+                ),
+              ),
+              const SizedBox(height: 24),
+              _SectionHeader('Backend'),
+              _Card(
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      secondary: const Icon(Icons.cloud, color: SlotSpyDarkTheme.primary),
+                      title: const Text('Use custom backend'),
+                      subtitle: const Text(
+                        'Point the app at your own SlotSpyCloud backend instead of OpenActive',
+                        style: TextStyle(color: SlotSpyDarkTheme.textSecondary),
+                      ),
+                      value: settings.useCustomBackend,
+                      onChanged: (v) => settings.setUseCustomBackend(v),
+                      activeColor: SlotSpyDarkTheme.primary,
+                    ),
+                    if (settings.useCustomBackend) ...[
+                      const Divider(height: 1, color: SlotSpyDarkTheme.surfaceLight),
+                      _BackendUrlSection(settings: settings),
+                    ],
+                  ],
                 ),
               ),
               const SizedBox(height: 24),
@@ -337,6 +361,155 @@ class SettingsScreen extends StatelessWidget {
                 foregroundColor: SlotSpyDarkTheme.danger),
             child: const Text('Clear All'),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BackendUrlSection extends StatefulWidget {
+  final SettingsProvider settings;
+
+  const _BackendUrlSection({required this.settings});
+
+  @override
+  State<_BackendUrlSection> createState() => _BackendUrlSectionState();
+}
+
+class _BackendUrlSectionState extends State<_BackendUrlSection> {
+  late final TextEditingController _controller;
+  bool _testing = false;
+  // null = not tested, true = ok, false = failed
+  bool? _testResult;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.settings.backendUrl ?? '');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _testConnection() async {
+    final url = _controller.text.trim();
+    if (url.isEmpty) return;
+    setState(() {
+      _testing = true;
+      _testResult = null;
+    });
+    final ok = await BackendService(url).testConnection();
+    if (mounted) {
+      setState(() {
+        _testing = false;
+        _testResult = ok;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = widget.settings;
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Backend URL',
+            style: TextStyle(
+              color: SlotSpyDarkTheme.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _controller,
+            decoration: InputDecoration(
+              hintText: 'http://mac-mini:8080',
+              hintStyle: const TextStyle(color: Color(0xFF8A8A8A)),
+              filled: true,
+              fillColor: SlotSpyDarkTheme.surfaceLight,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(
+                    color: SlotSpyDarkTheme.primary, width: 1.5),
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+            style: const TextStyle(
+                color: SlotSpyDarkTheme.textPrimary, fontSize: 14),
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+            onSubmitted: (v) => settings.setBackendUrl(v.trim()),
+            onChanged: (_) => setState(() => _testResult = null),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  settings.backendUrl?.isNotEmpty == true
+                      ? 'Using: ${settings.backendUrl}'
+                      : 'No URL set \u2014 enter your backend address',
+                  style: TextStyle(
+                    color: settings.backendUrl?.isNotEmpty == true
+                        ? SlotSpyDarkTheme.success
+                        : SlotSpyDarkTheme.warning,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: _testing
+                    ? null
+                    : () async {
+                        await settings
+                            .setBackendUrl(_controller.text.trim());
+                        await _testConnection();
+                      },
+                style: TextButton.styleFrom(
+                  foregroundColor: SlotSpyDarkTheme.primary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: _testing
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: SlotSpyDarkTheme.primary,
+                        ),
+                      )
+                    : const Text('Test connection',
+                        style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+          if (_testResult != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                _testResult! ? 'Connected successfully' : 'Connection failed',
+                style: TextStyle(
+                  color: _testResult!
+                      ? SlotSpyDarkTheme.success
+                      : SlotSpyDarkTheme.danger,
+                  fontSize: 11,
+                ),
+              ),
+            ),
         ],
       ),
     );
